@@ -1,0 +1,444 @@
+<title>Liverpool Fan Fund</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: one column. The ask first, then the document itself, then how to
+     sign it, then an honest account of how little exists yet.
+     Same identity as the rest of the project: Oswald, warm paper, one red. */
+  :root {
+    --bg: #FBF8F7;
+    --surface: #FFFFFF;
+    --surface-2: #F3ECEC;
+    --fg: #191315;
+    --muted: #6D5D61;
+    --faint: #9A898C;
+    --line: #E3D9DA;
+    --accent: #C8102E;
+    --accent-ink: #FFFFFF;
+    --ok: #1C6B47;
+    --warn: #9A5B12;
+    --display: "Oswald", "Haettenschweiler", "Arial Narrow", sans-serif;
+    --body: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141011; --surface: #1E1819; --surface-2: #272021;
+      --fg: #F2EBEC; --muted: #A89698; --faint: #7C6B6E; --line: #342B2D;
+      --accent: #FF4458; --accent-ink: #1A1416;
+      --ok: #5FD39B; --warn: #E0A355;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141011; --surface: #1E1819; --surface-2: #272021;
+    --fg: #F2EBEC; --muted: #A89698; --faint: #7C6B6E; --line: #342B2D;
+    --accent: #FF4458; --accent-ink: #1A1416;
+    --ok: #5FD39B; --warn: #E0A355;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--body); font-size: 17px; line-height: 1.6;
+    padding-block: 0 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  p { margin: 0; max-width: 64ch; }
+
+  /* Disclaimer strip, full bleed */
+  .strip {
+    background: var(--surface-2); border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    letter-spacing: .01em; padding: 8px 0;
+    margin-inline: calc(max(16px, env(safe-area-inset-left, 0px)) * -1);
+  }
+  .strip div {
+    max-width: 720px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  header { display: flex; flex-direction: column; gap: 14px; padding-top: 44px; }
+  .eyebrow {
+    font-family: var(--display); font-weight: 500; font-size: 12px;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--accent);
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(40px, 10.5vw, 76px); line-height: .94;
+    letter-spacing: -0.02em; text-transform: uppercase;
+    margin: 0; text-wrap: balance;
+  }
+  .lede { font-size: 20px; color: var(--muted); max-width: 48ch; }
+
+  h2 {
+    font-family: var(--display); font-weight: 500; font-size: 14px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  h3 { font-family: var(--body); font-weight: 600; font-size: 17px; margin: 0; }
+
+  /* The three-line summary */
+  .claims { display: flex; flex-direction: column; gap: 2px; }
+  .claim {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 16px 20px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .claim + .claim { border-top: 0; }
+  .claim b {
+    font-family: var(--display); font-weight: 600; font-size: 19px;
+    letter-spacing: .01em;
+  }
+  .claim span { font-size: 15.5px; color: var(--muted); }
+
+  /* The declaration */
+  .decl {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 26px 24px; display: flex; flex-direction: column; gap: 18px;
+  }
+  .decl .title {
+    font-family: var(--display); font-weight: 600; font-size: 13px;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
+  }
+  .decl p { font-size: 16.5px; }
+  .decl ol { margin: 0; padding-left: 26px; display: flex; flex-direction: column; gap: 13px; }
+  .decl li { padding-left: 4px; font-size: 16.5px; }
+  .decl li b { font-weight: 600; }
+  .decl .sep { height: 1px; background: var(--line); }
+  .decl .ver { font-family: var(--mono); font-size: 12.5px; color: var(--faint); }
+
+  /* Integrity check */
+  .check {
+    background: var(--surface-2); border: 1px solid var(--line);
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .check .hash {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+    overflow-wrap: anywhere; color: var(--fg);
+  }
+  .verdict {
+    font-family: var(--display); font-size: 12px; letter-spacing: .1em;
+    text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+  }
+  .verdict.match { color: var(--ok); }
+  .verdict.nomatch { color: var(--warn); }
+  .verdict .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+
+  /* Statement box with copy */
+  .stmt { display: flex; flex-direction: column; gap: 10px; }
+  .stmt code {
+    display: block; font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 14px 16px; overflow-wrap: anywhere;
+  }
+  button {
+    font-family: var(--display); font-weight: 500; font-size: 13px;
+    letter-spacing: .1em; text-transform: uppercase;
+    background: var(--accent); color: var(--accent-ink);
+    border: 0; padding: 11px 18px; cursor: pointer; align-self: flex-start;
+  }
+  button:hover { filter: brightness(1.08); }
+  .copied { font-size: 14px; color: var(--ok); }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; gap: 2px; }
+  .step {
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 17px 20px; align-items: start;
+  }
+  .step + .step { border-top: 0; }
+  .step .n {
+    font-family: var(--mono); font-weight: 600; font-size: 13px;
+    color: var(--accent-ink); background: var(--accent);
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  }
+  .step .b { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .step p { font-size: 15.5px; }
+
+  /* Status rows */
+  .status { display: flex; flex-direction: column; gap: 2px; }
+  .srow {
+    display: grid; grid-template-columns: 1fr auto; gap: 14px;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 13px 18px; align-items: baseline;
+  }
+  .srow + .srow { border-top: 0; }
+  .srow .what { font-size: 16px; min-width: 0; }
+  .srow .state {
+    font-family: var(--display); font-size: 11px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--faint); white-space: nowrap;
+  }
+  .srow .state.done { color: var(--ok); }
+
+  .note { font-size: 15px; color: var(--muted); }
+  footer {
+    border-top: 1px solid var(--line); padding-top: 22px;
+    font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 10px;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="strip"><div>An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">A fan-owned stake in Liverpool FC</span>
+    <h1>Money in,<br>glory out.</h1>
+    <p class="lede">We are supporters raising money to buy a piece of our own club. No pot, no custodian, no payouts — ever.</p>
+  </header>
+
+  <section>
+    <div class="claims">
+      <div class="claim">
+        <b>Your money never leaves your wallet</b>
+        <span>There is nothing to steal, because there is no pot. It stays yours, where you keep it, until the day it buys something.</span>
+      </div>
+      <div class="claim">
+        <b>You get a say, not a dividend</b>
+        <span>Nobody is getting rich here. What a member gets is a vote on what the club does — which is the whole reason to want this.</span>
+      </div>
+      <div class="claim">
+        <b>Nobody asks who you are</b>
+        <span>A wallet is the only credential. No name, no email, no account, nothing that could ever be leaked.</span>
+      </div>
+    </div>
+    <p class="note">Joining costs nothing and moves no money. You sign a document. Putting money behind it is a separate decision, taken whenever you're ready — or never.</p>
+  </section>
+
+  <section>
+    <h2>The declaration</h2>
+    <p>This is the whole thing. Signing it is what makes you a member.</p>
+    <div class="decl">
+      <span class="title">The Fan Fund Declaration</span>
+
+      <p>Liverpool Football Club belongs to its supporters in every way except ownership. This is an attempt to fix a piece of that: to buy a real stake in the club with money put up by fans, held by nobody, and directed by the people who put it in.</p>
+
+      <p>We are supporters raising money to buy a stake in Liverpool Football Club, and to hold it on behalf of supporters. Anyone, anywhere, with any amount, and without telling us who they are.</p>
+
+      <p>There is no pot. All money stays in the wallet of the supporter who put it there, and nothing can move it without that person's own signature. Nobody — not an organiser, not a committee, not whoever wrote this — ever holds anybody else's money.</p>
+
+      <div class="sep"></div>
+      <span class="title">The principles</span>
+
+      <ol>
+        <li><b>The purpose is to buy and hold a stake in Liverpool Football Club on behalf of its supporters.</b> Not to trade, not to invest, not to build a business. One club.</li>
+        <li><b>Money in, glory out.</b> No money is ever paid out to any member, in any form, for any reason. If the fund ever owns part of Liverpool FC, what Liverpool FC earns stays with Liverpool FC.</li>
+        <li><b>Nobody holds anybody else's money.</b> Each supporter's contribution remains in a wallet only they control, and returns to them on a date they chose themselves, whatever becomes of this movement.</li>
+        <li><b>Only committed money is counted.</b> Bitcoin a supporter merely owns does not count towards anything. Neither does support they merely feel. What we claim, we can prove.</li>
+        <li><b>What a member receives is a say, and never a return.</b> The society that holds the stake will be bound by its own rules to vote the club's shares the way its members vote — not to consult them, not to consider their views, but to vote as they voted, on the public record.</li>
+        <li><b>Money decides how money is spent. People decide how the club is run.</b> Spending is weighted by what each member has committed, because it is their money. The club's direction is one member, one vote, because a wealthy supporter is not more of a supporter.</li>
+        <li><b>There is no founder's share.</b> Nobody receives weight, priority or payment for having arrived first.</li>
+        <li><b>No member has to say who they are.</b> A wallet is the only credential this movement asks for, and no database of supporters will be built.</li>
+        <li><b>No app is the only way in.</b> The rules of this movement are published documents, not software. Anyone may write their own app, or use an ordinary wallet and no app at all, and be treated exactly the same.</li>
+        <li><b>No figure is published that cannot be checked by a stranger</b> against the public record, including the figures that count against us.</li>
+        <li><b>Anyone who disagrees with where this goes can take their money and go their own way</b> — and until a stake is actually bought, that costs them nothing but their place in the queue.</li>
+      </ol>
+
+      <div class="sep"></div>
+
+      <p>Sign it with the key that holds your bitcoin, and you are a member. Members are numbered in the order their signatures arrive.</p>
+      <p>No money moves when you sign. Committing comes later, if and when you choose.</p>
+
+      <div class="sep"></div>
+      <p class="ver"><strong>Version 1 · 15 October 2026</strong><br>Signatures are made over the exact text of this version. If it ever has to change — because a solicitor tells us it must, or because we got something wrong — a new version will be published alongside the reason for the change, and members will be asked whether they want to sign that one. This version stays on the record as what its signatories agreed to. No signature is ever moved onto words the signer did not read.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Check this page is the real thing</h2>
+    <p>Your browser has just hashed this page's own copy of the declaration. If it matches the published fingerprint, you are reading the genuine text and not somebody's edited version.</p>
+    <div class="check">
+      <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">Checking…</span></div>
+      <div class="hash" id="computed">—</div>
+      <p class="note" id="checkNote">A single changed word anywhere in the declaration would produce a completely different fingerprint.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How to join</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="n">1</span>
+        <div class="b">
+          <h3>Have a bitcoin wallet you control</h3>
+          <p>Sparrow or Electrum on a computer. It needs to be one where you hold the keys — not an exchange account. Use a native segwit address, the kind starting <code style="font-family:var(--mono);font-size:14px">bc1q</code>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="n">2</span>
+        <div class="b">
+          <h3>Sign the statement below</h3>
+          <p>Every wallet worth using has a "sign message" option. Paste the statement in, pick your address, sign. It costs nothing, touches no money, and never goes near the blockchain.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="n">3</span>
+        <div class="b">
+          <h3>Keep the address and the signature</h3>
+          <p>Those two lines are your entire membership record. There is nothing else to fill in and no account to create.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="n">4</span>
+        <div class="b">
+          <h3>Submit them when the register opens</h3>
+          <p>The register is the next thing being built. Anyone will be able to run their own copy of it, and a signature can be handed to anybody who will publish it, so nobody can be shut out.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stmt">
+      <p><strong>The statement to sign:</strong></p>
+      <code id="statement">I agree to the Fan Fund Declaration v1 (sha256:51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340) and join as a member.</code>
+      <button id="copyBtn" type="button">Copy the statement</button>
+      <span class="copied" id="copied" hidden>Copied. Paste it into your wallet exactly as it is.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where this actually is</h2>
+    <p>Honesty costs nothing and is the only thing we have so far, so here is the true state of it.</p>
+    <div class="status">
+      <div class="srow"><span class="what">The declaration, written and fingerprinted</span><span class="state done">Done</span></div>
+      <div class="srow"><span class="what">Signing and verifying, built and tested end to end</span><span class="state done">Done</span></div>
+      <div class="srow"><span class="what">The time-lock that holds committed money</span><span class="state">Next</span></div>
+      <div class="srow"><span class="what">The public register of members and committed money</span><span class="state">Not built</span></div>
+      <div class="srow"><span class="what">Voting on proposals</span><span class="state">Not built</span></div>
+      <div class="srow"><span class="what">A phone app that makes all of it easy</span><span class="state">Not built</span></div>
+      <div class="srow"><span class="what">Money raised</span><span class="state">None</span></div>
+      <div class="srow"><span class="what">Members signed up</span><span class="state">None yet</span></div>
+    </div>
+    <p class="note">Nobody has put a penny into this and nobody has been asked to. It is one supporter, a document, and some working code. If that sounds like the beginning of something rather than the end of it, that's because it is.</p>
+  </section>
+
+  <footer>
+    <p><strong>This is not an investment.</strong> There is no return, no dividend and no payout, now or ever. Bitcoin rises and falls, and money you commit can fall in value while it is committed. Nothing here is legal or financial advice.</p>
+    <p>An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
+  </footer>
+
+</div>
+
+<script id="declText" type="text/plain">THE FAN FUND DECLARATION
+
+Liverpool Football Club belongs to its supporters in every way except ownership. This is an attempt to fix a piece of that: to buy a real stake in the club with money put up by fans, held by nobody, and directed by the people who put it in.
+
+We are supporters raising money to buy a stake in Liverpool Football Club, and to hold it on behalf of supporters. Anyone, anywhere, with any amount, and without telling us who they are.
+
+There is no pot. All money stays in the wallet of the supporter who put it there, and nothing can move it without that person's own signature. Nobody — not an organiser, not a committee, not whoever wrote this — ever holds anybody else's money.
+
+THE PRINCIPLES
+
+1. The purpose is to buy and hold a stake in Liverpool Football Club on behalf of its supporters. Not to trade, not to invest, not to build a business. One club.
+
+2. Money in, glory out. No money is ever paid out to any member, in any form, for any reason. If the fund ever owns part of Liverpool FC, what Liverpool FC earns stays with Liverpool FC.
+
+3. Nobody holds anybody else's money. Each supporter's contribution remains in a wallet only they control, and returns to them on a date they chose themselves, whatever becomes of this movement.
+
+4. Only committed money is counted. Bitcoin a supporter merely owns does not count towards anything. Neither does support they merely feel. What we claim, we can prove.
+
+5. What a member receives is a say, and never a return. The society that holds the stake will be bound by its own rules to vote the club's shares the way its members vote — not to consult them, not to consider their views, but to vote as they voted, on the public record.
+
+6. Money decides how money is spent. People decide how the club is run. Spending is weighted by what each member has committed, because it is their money. The club's direction is one member, one vote, because a wealthy supporter is not more of a supporter.
+
+7. There is no founder's share. Nobody receives weight, priority or payment for having arrived first.
+
+8. No member has to say who they are. A wallet is the only credential this movement asks for, and no database of supporters will be built.
+
+9. No app is the only way in. The rules of this movement are published documents, not software. Anyone may write their own app, or use an ordinary wallet and no app at all, and be treated exactly the same.
+
+10. No figure is published that cannot be checked by a stranger against the public record, including the figures that count against us.
+
+11. Anyone who disagrees with where this goes can take their money and go their own way — and until a stake is actually bought, that costs them nothing but their place in the queue.
+
+Sign it with the key that holds your bitcoin, and you are a member. Members are numbered in the order their signatures arrive.
+
+No money moves when you sign. Committing comes later, if and when you choose.
+
+Version 1 · 15 October 2026
+
+Signatures are made over the exact text of this version. If it ever has to change — because a solicitor tells us it must, or because we got something wrong — a new version will be published alongside the reason for the change, and members will be asked whether they want to sign that one. This version stays on the record as what its signatories agreed to. No signature is ever moved onto words the signer did not read.
+</script>
+
+<script>
+  (function () {
+    var PUBLISHED = "51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340";
+
+    // The same canonicalisation rules the specification sets out: NFC, LF only,
+    // no trailing whitespace on a line, exactly one newline at the end.
+    function canonicalise(raw) {
+      return raw
+        .normalize("NFC")
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map(function (l) { return l.replace(/[ \t]+$/, ""); })
+        .join("\n")
+        .replace(/\n+$/, "") + "\n";
+    }
+
+    var verdict = document.getElementById("verdict");
+    var verdictText = document.getElementById("verdictText");
+    var computed = document.getElementById("computed");
+    var node = document.getElementById("declText");
+
+    function show(ok, hex) {
+      computed.textContent = hex || "could not be computed";
+      verdict.className = "verdict " + (ok ? "match" : "nomatch");
+      verdictText.textContent = ok ? "Fingerprint matches" : "Fingerprint does not match";
+    }
+
+    try {
+      var text = canonicalise(node.textContent);
+      var bytes = new TextEncoder().encode(text);
+      if (window.crypto && window.crypto.subtle) {
+        window.crypto.subtle.digest("SHA-256", bytes).then(function (buf) {
+          var hex = Array.prototype.map
+            .call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); })
+            .join("");
+          show(hex === PUBLISHED, hex);
+        }).catch(function () {
+          verdict.className = "verdict";
+          verdictText.textContent = "Could not check in this browser";
+          computed.textContent = PUBLISHED + "  (published fingerprint)";
+        });
+      } else {
+        verdict.className = "verdict";
+        verdictText.textContent = "Could not check in this browser";
+        computed.textContent = PUBLISHED + "  (published fingerprint)";
+      }
+    } catch (e) {
+      verdict.className = "verdict";
+      verdictText.textContent = "Could not check in this browser";
+      computed.textContent = PUBLISHED + "  (published fingerprint)";
+    }
+
+    var btn = document.getElementById("copyBtn");
+    var copied = document.getElementById("copied");
+    var stmt = document.getElementById("statement");
+    btn.addEventListener("click", function () {
+      var txt = stmt.textContent.trim();
+      function ok() { copied.hidden = false; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(ok).catch(select);
+      } else {
+        select();
+      }
+      function select() {
+        var r = document.createRange();
+        r.selectNodeContents(stmt);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        copied.textContent = "Selected — copy it with your browser's copy command.";
+        copied.hidden = false;
+      }
+    });
+  })();
+</script>
