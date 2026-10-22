@@ -1,0 +1,6 @@
+{
+  "name": "fanfund",
+  "private": true,
+  "type": "module",
+  "description": "The Fan Fund — declaration, register and lock"
+}

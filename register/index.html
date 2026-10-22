@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The register — Liverpool Fan Fund</title>
+<meta name="description" content="Every member and every pound committed, checked in your own browser rather than taken on trust.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<div class="bleed disclaimer"><div class="inner">An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
+<nav class="bleed"><div class="inner">
+  <a href="../">The declaration</a>
+  <a href="../why/">Why</a>
+  <a href="../how/">How it works</a>
+  <a href="./" aria-current="page">The register</a>
+  <a href="../risk/">Risks</a>
+</div></nav>
+
+<main class="inner">
+
+  <header class="page">
+    <span class="eyebrow">Checked by your browser, not by us</span>
+    <h1>The register</h1>
+    <p class="lede">Every member and every pound committed. Your own browser checks each signature as this page loads — nothing here is taken on our word.</p>
+  </header>
+
+  <section>
+    <div class="figure">
+      <span class="big" id="lockedTotal">—</span>
+      <span class="label">Committed right now</span>
+    </div>
+    <div class="facts">
+      <div><span class="v" id="memberCount">—</span><span class="k">members</span></div>
+      <div><span class="v" id="verifiedCount">—</span><span class="k">signatures verified</span></div>
+      <div><span class="v" id="lockCount">—</span><span class="k">locks</span></div>
+    </div>
+    <p class="note" id="asOf">Loading the register…</p>
+  </section>
+
+  <section>
+    <h2>What your browser just checked</h2>
+    <div class="panel">
+      <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">Checking…</span></div>
+      <p class="note" id="verdictDetail">Each member's signature is verified against the declaration's fingerprint using code running on your device. If a signature did not match, it would be shown below as failed rather than quietly dropped.</p>
+    </div>
+    <p class="note">The declaration this register is counting: <span class="mono" id="declHash">—</span></p>
+  </section>
+
+  <section>
+    <h2>Members</h2>
+    <div id="memberArea">
+      <p class="note">Loading…</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Check a signature yourself</h2>
+    <p>Paste an address and a signature and this page will tell you whether that address really signed the declaration. Useful if you have just signed and want to confirm it before submitting, and useful for checking anybody else's.</p>
+    <div class="panel">
+      <label for="addrIn" class="note">Address</label>
+      <input id="addrIn" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+             placeholder="bc1q…" style="font-family:var(--mono);font-size:13px;padding:10px 12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);width:100%">
+      <label for="sigIn" class="note">Signature</label>
+      <textarea id="sigIn" rows="3" autocomplete="off" spellcheck="false"
+                placeholder="base64 signature from your wallet"
+                style="font-family:var(--mono);font-size:13px;padding:10px 12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);width:100%;resize:vertical"></textarea>
+      <button id="checkBtn" type="button">Check it</button>
+      <div class="verdict" id="checkVerdict" hidden><span class="dot"></span><span id="checkText"></span></div>
+      <p class="note" id="checkDetail" hidden></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How to get on it</h2>
+    <div class="stack">
+      <div class="card step">
+        <span class="n">1</span>
+        <div class="b">
+          <h3>Sign the declaration</h3>
+          <p>Instructions are on <a href="../">the declaration page</a>. It costs nothing and moves no money.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <span class="n">2</span>
+        <div class="b">
+          <h3>Add your two lines to <code>registrations.json</code></h3>
+          <p>Open a pull request on the repository with your address and signature added to the members list. That is the whole submission — there is no form and no account.</p>
+        </div>
+      </div>
+      <div class="card step">
+        <span class="n">3</span>
+        <div class="b">
+          <h3>Or hand it to anybody who will publish it</h3>
+          <p>A signature cannot be forged and needs nobody's permission to pass on. If you would rather not use GitHub, give your two lines to someone who will submit them for you. It still counts, and we cannot keep you out.</p>
+        </div>
+      </div>
+    </div>
+    <p class="note">Submissions are pull requests on purpose. The history is public and append-only, so a registration cannot be quietly altered or removed after the fact, and anyone can keep their own copy of the whole register.</p>
+  </section>
+
+  <section>
+    <h2>Run your own copy</h2>
+    <p>This page is static. It reads one file and checks it in your browser — there is no server deciding what you see. So you can run the identical register yourself, and if your total ever disagrees with ours, ours is wrong.</p>
+    <pre>git clone https://github.com/Jimbus9/fanfund
+cd fanfund
+node js/verify.test.mjs     # check the verifier against another library
+python3 -m http.server      # then open localhost:8000/register/</pre>
+  </section>
+
+</main>
+
+<footer class="inner">
+  <p><strong>This is not an investment.</strong> There is no return, no dividend and no payout, now or ever. Nothing here is legal or financial advice.</p>
+  <p>An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
+  <p><a href="https://github.com/Jimbus9/fanfund">Source and documents on GitHub</a></p>
+</footer>
+
+<script type="module">
+import { verifyMembership } from "../js/verify.mjs";
+
+const CHAIN_API = "https://mempool.space/api";
+const el = (id) => document.getElementById(id);
+const fmtBtc = (sats) => (sats / 1e8).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") || "0";
+
+function setVerdict(node, textNode, ok, text) {
+  node.className = "verdict " + (ok ? "ok" : "bad");
+  textNode.textContent = text;
+  node.hidden = false;
+}
+
+// ---- Load and verify the register ----------------------------------------
+
+let data;
+try {
+  const res = await fetch("../registrations.json", { cache: "no-store" });
+  data = await res.json();
+} catch (e) {
+  el("asOf").textContent = "Could not load registrations.json.";
+  el("memberArea").innerHTML = '<p class="note">The register file could not be read, so nothing is being claimed on this page.</p>';
+  setVerdict(el("verdict"), el("verdictText"), false, "Register could not be loaded");
+  throw e;
+}
+
+const statement = data.declaration.statement;
+el("declHash").textContent = "sha256:" + data.declaration.sha256;
+
+const members = data.members || [];
+const locks = data.locks || [];
+
+const checked = members.map((m) => ({
+  ...m,
+  result: verifyMembership({ address: m.address, signature: m.signature, message: statement }),
+}));
+const verified = checked.filter((m) => m.result.valid);
+const failed = checked.filter((m) => !m.result.valid);
+
+el("memberCount").textContent = String(members.length);
+el("verifiedCount").textContent = String(verified.length);
+el("lockCount").textContent = String(locks.length);
+
+if (members.length === 0) {
+  setVerdict(el("verdict"), el("verdictText"), true, "Nothing to check yet");
+  el("verdictDetail").textContent =
+    "No signatures have been submitted, so there is nothing for your browser to verify. The moment one is, this is where it gets checked.";
+} else if (failed.length === 0) {
+  setVerdict(el("verdict"), el("verdictText"), true,
+    `All ${verified.length} signature${verified.length === 1 ? "" : "s"} verified`);
+} else {
+  setVerdict(el("verdict"), el("verdictText"), false,
+    `${failed.length} of ${members.length} did not verify`);
+  el("verdictDetail").textContent =
+    "A signature that does not verify is shown below rather than removed. It stays on the record and it is not counted.";
+}
+
+// ---- Members -------------------------------------------------------------
+
+if (members.length === 0) {
+  el("memberArea").innerHTML = `
+    <div class="panel">
+      <p><strong>Nobody has signed yet.</strong></p>
+      <p class="note">That includes the person who wrote this. When the first signature is submitted it will appear here as member 1, with the signature published so that anyone can check it for themselves.</p>
+      <p class="note">An empty register that works is worth more than a full one that cannot be checked. If you want to see what this page looks like with people in it, there is a <a href="../mock/register.html">mock-up using invented figures</a>.</p>
+    </div>`;
+} else {
+  const rows = checked.map((m) => `
+    <tr>
+      <td class="num">${m.n ?? ""}</td>
+      <td class="mono">${m.address}</td>
+      <td>${m.signed ?? ""}</td>
+      <td><span class="pill ${m.result.valid ? "ok" : "bad"}">${m.result.valid ? "verified" : "failed"}</span></td>
+    </tr>`).join("");
+  el("memberArea").innerHTML = `
+    <div class="scroller"><table>
+      <thead><tr><th>No.</th><th>Address</th><th>Signed</th><th>Signature</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+// ---- Committed total -----------------------------------------------------
+
+if (locks.length === 0) {
+  el("lockedTotal").textContent = "0";
+  el("asOf").textContent =
+    "No money has been committed. This figure counts locked bitcoin only — coins someone merely owns are not counted, and neither is support anybody merely feels.";
+} else {
+  el("lockedTotal").textContent = "…";
+  let sats = 0;
+  let unreachable = 0;
+  for (const lock of locks) {
+    try {
+      const res = await fetch(`${CHAIN_API}/address/${lock.address}`);
+      const info = await res.json();
+      const s = info.chain_stats;
+      sats += (s.funded_txo_sum - s.spent_txo_sum);
+    } catch { unreachable++; }
+  }
+  el("lockedTotal").textContent = fmtBtc(sats) + " BTC";
+  el("asOf").textContent = unreachable === 0
+    ? `Read from the blockchain just now, in your browser. ${locks.length} lock${locks.length === 1 ? "" : "s"}.`
+    : `${unreachable} of ${locks.length} locks could not be read from the chain, so this figure is incomplete.`;
+}
+
+// ---- Check-your-own tool -------------------------------------------------
+
+el("checkBtn").addEventListener("click", () => {
+  const address = el("addrIn").value.trim();
+  const signature = el("sigIn").value.trim();
+  const detail = el("checkDetail");
+
+  if (!address || !signature) {
+    setVerdict(el("checkVerdict"), el("checkText"), false, "Both fields are needed");
+    detail.hidden = true;
+    return;
+  }
+  const r = verifyMembership({ address, signature, message: statement });
+  setVerdict(el("checkVerdict"), el("checkText"), r.valid,
+    r.valid ? "Valid — that address signed the declaration" : "Not valid");
+  detail.hidden = false;
+  detail.textContent = r.valid
+    ? "You can submit these two lines to the register."
+    : r.derived
+      ? `${r.reason}. The signature you pasted belongs to ${r.derived}.`
+      : r.reason;
+});
+</script>
+
+</body>
+</html>

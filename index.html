@@ -1,223 +1,58 @@
-<title>Liverpool Fan Fund</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liverpool Fan Fund — the declaration</title>
+<meta name="description" content="Supporters raising money to buy a stake in Liverpool FC. No pot, no custodian, no payouts. Read the declaration and sign it.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
-<style>
-  /* Layout: one column. The ask first, then the document itself, then how to
-     sign it, then an honest account of how little exists yet.
-     Same identity as the rest of the project: Oswald, warm paper, one red. */
-  :root {
-    --bg: #FBF8F7;
-    --surface: #FFFFFF;
-    --surface-2: #F3ECEC;
-    --fg: #191315;
-    --muted: #6D5D61;
-    --faint: #9A898C;
-    --line: #E3D9DA;
-    --accent: #C8102E;
-    --accent-ink: #FFFFFF;
-    --ok: #1C6B47;
-    --warn: #9A5B12;
-    --display: "Oswald", "Haettenschweiler", "Arial Narrow", sans-serif;
-    --body: "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #141011; --surface: #1E1819; --surface-2: #272021;
-      --fg: #F2EBEC; --muted: #A89698; --faint: #7C6B6E; --line: #342B2D;
-      --accent: #FF4458; --accent-ink: #1A1416;
-      --ok: #5FD39B; --warn: #E0A355;
-      color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #141011; --surface: #1E1819; --surface-2: #272021;
-    --fg: #F2EBEC; --muted: #A89698; --faint: #7C6B6E; --line: #342B2D;
-    --accent: #FF4458; --accent-ink: #1A1416;
-    --ok: #5FD39B; --warn: #E0A355;
-    color-scheme: dark;
-  }
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-  body {
-    background: var(--bg); color: var(--fg);
-    font-family: var(--body); font-size: 17px; line-height: 1.6;
-    padding-block: 0 56px;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-  }
-  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
-  section { display: flex; flex-direction: column; gap: 16px; }
-  p { margin: 0; max-width: 64ch; }
+<div class="bleed disclaimer"><div class="inner">An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
+<nav class="bleed"><div class="inner">
+  <a href="./" aria-current="page">The declaration</a>
+  <a href="why/">Why</a>
+  <a href="how/">How it works</a>
+  <a href="register/">The register</a>
+  <a href="risk/">Risks</a>
+</div></nav>
 
-  /* Disclaimer strip, full bleed */
-  .strip {
-    background: var(--surface-2); border-bottom: 1px solid var(--line);
-    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
-    letter-spacing: .01em; padding: 8px 0;
-    margin-inline: calc(max(16px, env(safe-area-inset-left, 0px)) * -1);
-  }
-  .strip div {
-    max-width: 720px; margin: 0 auto;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-  }
+<main class="inner">
 
-  header { display: flex; flex-direction: column; gap: 14px; padding-top: 44px; }
-  .eyebrow {
-    font-family: var(--display); font-weight: 500; font-size: 12px;
-    letter-spacing: .18em; text-transform: uppercase; color: var(--accent);
-  }
-  h1 {
-    font-family: var(--display); font-weight: 700;
-    font-size: clamp(40px, 10.5vw, 76px); line-height: .94;
-    letter-spacing: -0.02em; text-transform: uppercase;
-    margin: 0; text-wrap: balance;
-  }
-  .lede { font-size: 20px; color: var(--muted); max-width: 48ch; }
-
-  h2 {
-    font-family: var(--display); font-weight: 500; font-size: 14px;
-    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
-    margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line);
-  }
-  h3 { font-family: var(--body); font-weight: 600; font-size: 17px; margin: 0; }
-
-  /* The three-line summary */
-  .claims { display: flex; flex-direction: column; gap: 2px; }
-  .claim {
-    background: var(--surface); border: 1px solid var(--line);
-    padding: 16px 20px; display: flex; flex-direction: column; gap: 3px;
-  }
-  .claim + .claim { border-top: 0; }
-  .claim b {
-    font-family: var(--display); font-weight: 600; font-size: 19px;
-    letter-spacing: .01em;
-  }
-  .claim span { font-size: 15.5px; color: var(--muted); }
-
-  /* The declaration */
-  .decl {
-    background: var(--surface); border: 1px solid var(--line);
-    padding: 26px 24px; display: flex; flex-direction: column; gap: 18px;
-  }
-  .decl .title {
-    font-family: var(--display); font-weight: 600; font-size: 13px;
-    letter-spacing: .16em; text-transform: uppercase; color: var(--accent);
-  }
-  .decl p { font-size: 16.5px; }
-  .decl ol { margin: 0; padding-left: 26px; display: flex; flex-direction: column; gap: 13px; }
-  .decl li { padding-left: 4px; font-size: 16.5px; }
-  .decl li b { font-weight: 600; }
-  .decl .sep { height: 1px; background: var(--line); }
-  .decl .ver { font-family: var(--mono); font-size: 12.5px; color: var(--faint); }
-
-  /* Integrity check */
-  .check {
-    background: var(--surface-2); border: 1px solid var(--line);
-    padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
-  }
-  .check .hash {
-    font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
-    overflow-wrap: anywhere; color: var(--fg);
-  }
-  .verdict {
-    font-family: var(--display); font-size: 12px; letter-spacing: .1em;
-    text-transform: uppercase; display: flex; align-items: center; gap: 8px;
-  }
-  .verdict.match { color: var(--ok); }
-  .verdict.nomatch { color: var(--warn); }
-  .verdict .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
-
-  /* Statement box with copy */
-  .stmt { display: flex; flex-direction: column; gap: 10px; }
-  .stmt code {
-    display: block; font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
-    background: var(--surface); border: 1px solid var(--line);
-    padding: 14px 16px; overflow-wrap: anywhere;
-  }
-  button {
-    font-family: var(--display); font-weight: 500; font-size: 13px;
-    letter-spacing: .1em; text-transform: uppercase;
-    background: var(--accent); color: var(--accent-ink);
-    border: 0; padding: 11px 18px; cursor: pointer; align-self: flex-start;
-  }
-  button:hover { filter: brightness(1.08); }
-  .copied { font-size: 14px; color: var(--ok); }
-
-  /* Steps */
-  .steps { display: flex; flex-direction: column; gap: 2px; }
-  .step {
-    display: grid; grid-template-columns: 44px 1fr; gap: 16px;
-    background: var(--surface); border: 1px solid var(--line);
-    padding: 17px 20px; align-items: start;
-  }
-  .step + .step { border-top: 0; }
-  .step .n {
-    font-family: var(--mono); font-weight: 600; font-size: 13px;
-    color: var(--accent-ink); background: var(--accent);
-    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-  }
-  .step .b { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .step p { font-size: 15.5px; }
-
-  /* Status rows */
-  .status { display: flex; flex-direction: column; gap: 2px; }
-  .srow {
-    display: grid; grid-template-columns: 1fr auto; gap: 14px;
-    background: var(--surface); border: 1px solid var(--line);
-    padding: 13px 18px; align-items: baseline;
-  }
-  .srow + .srow { border-top: 0; }
-  .srow .what { font-size: 16px; min-width: 0; }
-  .srow .state {
-    font-family: var(--display); font-size: 11px; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--faint); white-space: nowrap;
-  }
-  .srow .state.done { color: var(--ok); }
-
-  .note { font-size: 15px; color: var(--muted); }
-  footer {
-    border-top: 1px solid var(--line); padding-top: 22px;
-    font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 10px;
-  }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-</style>
-
-<div class="strip"><div>An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
-
-<div class="wrap">
-
-  <header>
+  <header class="page">
     <span class="eyebrow">A fan-owned stake in Liverpool FC</span>
-    <h1>Money in,<br>glory out.</h1>
+    <h1 class="huge">Money in,<br>glory out.</h1>
     <p class="lede">We are supporters raising money to buy a piece of our own club. No pot, no custodian, no payouts — ever.</p>
   </header>
 
   <section>
-    <div class="claims">
-      <div class="claim">
-        <b>Your money never leaves your wallet</b>
-        <span>There is nothing to steal, because there is no pot. It stays yours, where you keep it, until the day it buys something.</span>
+    <div class="stack">
+      <div class="card">
+        <b class="head">Your money never leaves your wallet</b>
+        <p>There is nothing to steal, because there is no pot. It stays yours, where you keep it, until the day it buys something.</p>
       </div>
-      <div class="claim">
-        <b>You get a say, not a dividend</b>
-        <span>Nobody is getting rich here. What a member gets is a vote on what the club does — which is the whole reason to want this.</span>
+      <div class="card">
+        <b class="head">You get a say, not a dividend</b>
+        <p>Nobody is getting rich here. What a member gets is a vote on what the club does — which is the whole reason to want this.</p>
       </div>
-      <div class="claim">
-        <b>Nobody asks who you are</b>
-        <span>A wallet is the only credential. No name, no email, no account, nothing that could ever be leaked.</span>
+      <div class="card">
+        <b class="head">Nobody asks who you are</b>
+        <p>A wallet is the only credential. No name, no email, no account, nothing that could ever be leaked.</p>
       </div>
     </div>
-    <p class="note">Joining costs nothing and moves no money. You sign a document. Putting money behind it is a separate decision, taken whenever you're ready — or never.</p>
+    <p class="note">Joining costs nothing and moves no money. You sign a document. Putting money behind it is a separate decision, taken whenever you are ready — or never. <a href="why/">Why we are doing this</a> · <a href="how/">how it works</a>.</p>
   </section>
 
   <section>
     <h2>The declaration</h2>
-    <p>This is the whole thing. Signing it is what makes you a member.</p>
-    <div class="decl">
-      <span class="title">The Fan Fund Declaration</span>
+    <p>This is the whole thing. Signing it is what makes you a member. It is deliberately short, and it is deliberately the only part that never changes.</p>
+
+    <div class="card" style="padding:26px 24px;gap:18px">
+      <span class="eyebrow">The Fan Fund Declaration</span>
 
       <p>Liverpool Football Club belongs to its supporters in every way except ownership. This is an attempt to fix a piece of that: to buy a real stake in the club with money put up by fans, held by nobody, and directed by the people who put it in.</p>
 
@@ -225,10 +60,9 @@
 
       <p>There is no pot. All money stays in the wallet of the supporter who put it there, and nothing can move it without that person's own signature. Nobody — not an organiser, not a committee, not whoever wrote this — ever holds anybody else's money.</p>
 
-      <div class="sep"></div>
-      <span class="title">The principles</span>
+      <span class="eyebrow" style="margin-top:4px">The principles</span>
 
-      <ol>
+      <ol style="margin:0;padding-left:26px;display:flex;flex-direction:column;gap:13px">
         <li><b>The purpose is to buy and hold a stake in Liverpool Football Club on behalf of its supporters.</b> Not to trade, not to invest, not to build a business. One club.</li>
         <li><b>Money in, glory out.</b> No money is ever paid out to any member, in any form, for any reason. If the fund ever owns part of Liverpool FC, what Liverpool FC earns stays with Liverpool FC.</li>
         <li><b>Nobody holds anybody else's money.</b> Each supporter's contribution remains in a wallet only they control, and returns to them on a date they chose themselves, whatever becomes of this movement.</li>
@@ -242,89 +76,81 @@
         <li><b>Anyone who disagrees with where this goes can take their money and go their own way</b> — and until a stake is actually bought, that costs them nothing but their place in the queue.</li>
       </ol>
 
-      <div class="sep"></div>
-
       <p>Sign it with the key that holds your bitcoin, and you are a member. Members are numbered in the order their signatures arrive.</p>
       <p>No money moves when you sign. Committing comes later, if and when you choose.</p>
 
-      <div class="sep"></div>
-      <p class="ver"><strong>Version 1 · 15 October 2026</strong><br>Signatures are made over the exact text of this version. If it ever has to change — because a solicitor tells us it must, or because we got something wrong — a new version will be published alongside the reason for the change, and members will be asked whether they want to sign that one. This version stays on the record as what its signatories agreed to. No signature is ever moved onto words the signer did not read.</p>
+      <p class="note" style="border-top:1px solid var(--line);padding-top:16px"><strong>Version 1 · 15 October 2026</strong><br>
+      Signatures are made over the exact text of this version. If it ever has to change — because a solicitor tells us it must, or because we got something wrong — a new version will be published alongside the reason for the change, and members will be asked whether they want to sign that one. This version stays on the record as what its signatories agreed to. No signature is ever moved onto words the signer did not read.</p>
     </div>
   </section>
 
   <section>
     <h2>Check this page is the real thing</h2>
-    <p>Your browser has just hashed this page's own copy of the declaration. If it matches the published fingerprint, you are reading the genuine text and not somebody's edited version.</p>
-    <div class="check">
+    <p>Your browser has just hashed this page's own copy of the declaration. If it matches the published fingerprint, you are reading the genuine text and not somebody's edited copy.</p>
+    <div class="panel">
       <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">Checking…</span></div>
-      <div class="hash" id="computed">—</div>
-      <p class="note" id="checkNote">A single changed word anywhere in the declaration would produce a completely different fingerprint.</p>
+      <div class="mono" id="computed">—</div>
+      <p class="note">A single changed word anywhere in the declaration would produce a completely different fingerprint. <a href="spec/">The exact text and the rules for hashing it</a> are published.</p>
     </div>
   </section>
 
   <section>
-    <h2>How to join</h2>
-    <div class="steps">
-      <div class="step">
+    <h2>Signing it</h2>
+    <div class="stack">
+      <div class="card step">
         <span class="n">1</span>
         <div class="b">
           <h3>Have a bitcoin wallet you control</h3>
-          <p>Sparrow or Electrum on a computer. It needs to be one where you hold the keys — not an exchange account. Use a native segwit address, the kind starting <code style="font-family:var(--mono);font-size:14px">bc1q</code>.</p>
+          <p>Sparrow or Electrum on a computer — one where you hold the keys, not an exchange account. Use a native segwit address, the kind starting <code>bc1q</code>.</p>
         </div>
       </div>
-      <div class="step">
+      <div class="card step">
         <span class="n">2</span>
         <div class="b">
           <h3>Sign the statement below</h3>
-          <p>Every wallet worth using has a "sign message" option. Paste the statement in, pick your address, sign. It costs nothing, touches no money, and never goes near the blockchain.</p>
+          <p>Every wallet worth using has a "sign message" option. Paste the statement, pick your address, sign. It costs nothing, touches no money, and never goes near the blockchain.</p>
         </div>
       </div>
-      <div class="step">
+      <div class="card step">
         <span class="n">3</span>
         <div class="b">
-          <h3>Keep the address and the signature</h3>
-          <p>Those two lines are your entire membership record. There is nothing else to fill in and no account to create.</p>
-        </div>
-      </div>
-      <div class="step">
-        <span class="n">4</span>
-        <div class="b">
-          <h3>Submit them when the register opens</h3>
-          <p>The register is the next thing being built. Anyone will be able to run their own copy of it, and a signature can be handed to anybody who will publish it, so nobody can be shut out.</p>
+          <h3>Submit your address and signature</h3>
+          <p>Those two lines are your entire membership record. <a href="register/">The register</a> explains where they go — and lets you check your signature works before you send it.</p>
         </div>
       </div>
     </div>
 
-    <div class="stmt">
-      <p><strong>The statement to sign:</strong></p>
-      <code id="statement">I agree to the Fan Fund Declaration v1 (sha256:51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340) and join as a member.</code>
-      <button id="copyBtn" type="button">Copy the statement</button>
-      <span class="copied" id="copied" hidden>Copied. Paste it into your wallet exactly as it is.</span>
-    </div>
+    <p><strong>The statement to sign:</strong></p>
+    <div class="block" id="statement">I agree to the Fan Fund Declaration v1 (sha256:51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340) and join as a member.</div>
+    <button id="copyBtn" type="button">Copy the statement</button>
+    <p class="note" id="copied" hidden>Copied. Paste it into your wallet exactly as it is.</p>
+    <p class="note">Before you commit any money — as opposed to signing — read <a href="risk/">what you are risking</a>. It is short and it is not reassuring.</p>
   </section>
 
   <section>
     <h2>Where this actually is</h2>
-    <p>Honesty costs nothing and is the only thing we have so far, so here is the true state of it.</p>
-    <div class="status">
-      <div class="srow"><span class="what">The declaration, written and fingerprinted</span><span class="state done">Done</span></div>
-      <div class="srow"><span class="what">Signing and verifying, built and tested end to end</span><span class="state done">Done</span></div>
-      <div class="srow"><span class="what">The time-lock that holds committed money</span><span class="state">Next</span></div>
-      <div class="srow"><span class="what">The public register of members and committed money</span><span class="state">Not built</span></div>
-      <div class="srow"><span class="what">Voting on proposals</span><span class="state">Not built</span></div>
-      <div class="srow"><span class="what">A phone app that makes all of it easy</span><span class="state">Not built</span></div>
-      <div class="srow"><span class="what">Money raised</span><span class="state">None</span></div>
-      <div class="srow"><span class="what">Members signed up</span><span class="state">None yet</span></div>
-    </div>
-    <p class="note">Nobody has put a penny into this and nobody has been asked to. It is one supporter, a document, and some working code. If that sounds like the beginning of something rather than the end of it, that's because it is.</p>
+    <div class="scroller"><table>
+      <tbody>
+        <tr><td>The declaration, written and fingerprinted</td><td><span class="pill ok">Done</span></td></tr>
+        <tr><td>Signing and verifying, tested end to end</td><td><span class="pill ok">Done</span></td></tr>
+        <tr><td>The register</td><td><span class="pill ok">Live, and empty</span></td></tr>
+        <tr><td>The time-lock that holds committed money</td><td><span class="pill warn">Built, being tested</span></td></tr>
+        <tr><td>Voting on proposals</td><td><span class="pill">Not built</span></td></tr>
+        <tr><td>A phone app that makes all of it easy</td><td><span class="pill">Not built</span></td></tr>
+        <tr><td>Money raised</td><td><span class="pill">None</span></td></tr>
+        <tr><td>Members signed up</td><td><span class="pill">None yet</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Nobody has put a penny into this and nobody has been asked to. It is one supporter, a document, and some working code. If that sounds like the beginning of something rather than the end of it, that is because it is.</p>
   </section>
 
-  <footer>
-    <p><strong>This is not an investment.</strong> There is no return, no dividend and no payout, now or ever. Bitcoin rises and falls, and money you commit can fall in value while it is committed. Nothing here is legal or financial advice.</p>
-    <p>An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
-  </footer>
+</main>
 
-</div>
+<footer class="inner">
+  <p><strong>This is not an investment.</strong> There is no return, no dividend and no payout, now or ever. Bitcoin rises and falls, and money you commit can fall in value while it is committed. Nothing here is legal or financial advice.</p>
+  <p>An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
+  <p><a href="https://github.com/Jimbus9/fanfund">Source and documents on GitHub</a></p>
+</footer>
 
 <script id="declText" type="text/plain">THE FAN FUND DECLARATION
 
@@ -368,77 +194,61 @@ Signatures are made over the exact text of this version. If it ever has to chang
 </script>
 
 <script>
-  (function () {
-    var PUBLISHED = "51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340";
+(function () {
+  var PUBLISHED = "51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340";
 
-    // The same canonicalisation rules the specification sets out: NFC, LF only,
-    // no trailing whitespace on a line, exactly one newline at the end.
-    function canonicalise(raw) {
-      return raw
-        .normalize("NFC")
-        .replace(/\r\n?/g, "\n")
-        .split("\n")
-        .map(function (l) { return l.replace(/[ \t]+$/, ""); })
-        .join("\n")
-        .replace(/\n+$/, "") + "\n";
+  function canonicalise(raw) {
+    return raw.normalize("NFC").replace(/\r\n?/g, "\n").split("\n")
+      .map(function (l) { return l.replace(/[ \t]+$/, ""); })
+      .join("\n").replace(/\n+$/, "") + "\n";
+  }
+
+  var verdict = document.getElementById("verdict");
+  var verdictText = document.getElementById("verdictText");
+  var computed = document.getElementById("computed");
+
+  function unavailable() {
+    verdict.className = "verdict";
+    verdictText.textContent = "Could not check in this browser";
+    computed.textContent = PUBLISHED + "  (the published fingerprint)";
+  }
+
+  try {
+    var bytes = new TextEncoder().encode(canonicalise(document.getElementById("declText").textContent));
+    if (!window.crypto || !window.crypto.subtle) { unavailable(); }
+    else {
+      window.crypto.subtle.digest("SHA-256", bytes).then(function (buf) {
+        var hex = Array.prototype.map.call(new Uint8Array(buf), function (b) {
+          return b.toString(16).padStart(2, "0");
+        }).join("");
+        var ok = hex === PUBLISHED;
+        computed.textContent = hex;
+        verdict.className = "verdict " + (ok ? "ok" : "bad");
+        verdictText.textContent = ok ? "Fingerprint matches" : "Fingerprint does not match";
+      }).catch(unavailable);
     }
+  } catch (e) { unavailable(); }
 
-    var verdict = document.getElementById("verdict");
-    var verdictText = document.getElementById("verdictText");
-    var computed = document.getElementById("computed");
-    var node = document.getElementById("declText");
-
-    function show(ok, hex) {
-      computed.textContent = hex || "could not be computed";
-      verdict.className = "verdict " + (ok ? "match" : "nomatch");
-      verdictText.textContent = ok ? "Fingerprint matches" : "Fingerprint does not match";
+  var btn = document.getElementById("copyBtn");
+  var copied = document.getElementById("copied");
+  var stmt = document.getElementById("statement");
+  btn.addEventListener("click", function () {
+    function select() {
+      var r = document.createRange();
+      r.selectNodeContents(stmt);
+      var s = window.getSelection();
+      s.removeAllRanges(); s.addRange(r);
+      copied.textContent = "Selected — copy it with your browser's copy command.";
+      copied.hidden = false;
     }
-
-    try {
-      var text = canonicalise(node.textContent);
-      var bytes = new TextEncoder().encode(text);
-      if (window.crypto && window.crypto.subtle) {
-        window.crypto.subtle.digest("SHA-256", bytes).then(function (buf) {
-          var hex = Array.prototype.map
-            .call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); })
-            .join("");
-          show(hex === PUBLISHED, hex);
-        }).catch(function () {
-          verdict.className = "verdict";
-          verdictText.textContent = "Could not check in this browser";
-          computed.textContent = PUBLISHED + "  (published fingerprint)";
-        });
-      } else {
-        verdict.className = "verdict";
-        verdictText.textContent = "Could not check in this browser";
-        computed.textContent = PUBLISHED + "  (published fingerprint)";
-      }
-    } catch (e) {
-      verdict.className = "verdict";
-      verdictText.textContent = "Could not check in this browser";
-      computed.textContent = PUBLISHED + "  (published fingerprint)";
-    }
-
-    var btn = document.getElementById("copyBtn");
-    var copied = document.getElementById("copied");
-    var stmt = document.getElementById("statement");
-    btn.addEventListener("click", function () {
-      var txt = stmt.textContent.trim();
-      function ok() { copied.hidden = false; }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(ok).catch(select);
-      } else {
-        select();
-      }
-      function select() {
-        var r = document.createRange();
-        r.selectNodeContents(stmt);
-        var s = window.getSelection();
-        s.removeAllRanges();
-        s.addRange(r);
-        copied.textContent = "Selected — copy it with your browser's copy command.";
-        copied.hidden = false;
-      }
-    });
-  })();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(stmt.textContent.trim())
+        .then(function () { copied.hidden = false; })
+        .catch(select);
+    } else { select(); }
+  });
+})();
 </script>
+
+</body>
+</html>
