@@ -137,6 +137,29 @@ proves the taproot construction offline; nothing has yet proven the network
 enforces it. Run `run-testnet.mjs` for taproot too before trusting it with
 anything.
 
+## Commitments
+
+`commitment.mjs` and `commitment.test.mjs` cover the other half: how a supporter
+backs one specific purchase with a locked coin.
+
+A commitment is the owner's half of a transaction nobody has broadcast. It
+cannot move a coin, because the purchase exit needs the co-signer too, so it can
+be published and copied freely by anybody. Three operations: the supporter
+builds one, anybody verifies one, and at settlement the co-signer completes it.
+
+`commitment.test.mjs` runs 31 checks offline. Most of them assert a
+**rejection**, because that is where the value is: a tampered destination, a
+forged owner signature, a destination nobody attested, one that has not waited
+out its fourteen days, a revoked one, a declared locktime, a fee large enough to
+suggest a client bug, and two different ways a remainder output could try to
+smuggle coins out of a lock early.
+
+It also proves the thing that matters most about settlement: **the co-signer
+cannot change where the money goes.** Altering any output invalidates the
+owner's signature, and the co-signer cannot replace it.
+
+See `spec/commitment-format.md` and `spec/destinations-format.md`.
+
 ## What this does not cover
 
 - **Real money.** Testnet only. Nothing here has touched a satoshi of value.

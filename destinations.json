@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "updated": "2026-10-23",
+  "minimum_age_days": 14,
+  "threshold": 1,
+  "attestors": [],
+  "entries": [],
+  "note": "Empty, and it should be. No destination can be attested until there is something to buy and a body to receive it. An address appearing here before then would be the clearest possible sign that something is wrong. See spec/destinations-format.md."
+}
