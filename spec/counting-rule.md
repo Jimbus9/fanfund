@@ -93,6 +93,18 @@ as a financial figure.
 "locked" at or above the minimum. This is the figure to quote alongside the
 committed total, because the two describe the same group of people.
 
+Derived with no extra data, because the key that signs the declaration is the
+key that owns the locks:
+
+```
+member(lock) = P2WPKH address of hash160(lock's owner public key)
+committed_members = count of distinct member(lock) over all counted locks
+```
+
+A lock whose derived address is not on the register is counted in the money and
+not in the members. It is somebody's lock either way, and the money is the
+figure that matters; silently discarding it would understate the total.
+
 Where only one figure is given, it must be the committed one, and it must be
 labelled.
 

@@ -14,6 +14,19 @@ attractive thing in the project to attack. Draining locks would require
 corrupting this list as well as putting up a convincing proposal — not merely
 the second.
 
+## This document is a starting point, not a settled answer
+
+Nothing can be attested until there is something to buy and a body to receive
+it, which is a long way off. What is written here is a workable first design
+recorded so that the problem is not discovered late — not a claim to have solved
+it.
+
+By the time it matters there should be a great many more people involved, several
+of whom will know more about securing a list like this than anybody who has
+worked on it so far. Their ideas should replace these if they are better. The one
+part worth defending is the separation below: **the keys that attest a
+destination must never be the key that spends to it.**
+
 ## The list is `destinations.json`
 
 It lives in the project repository and it is **append-only**. Nothing is ever

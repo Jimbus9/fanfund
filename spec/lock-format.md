@@ -108,6 +108,10 @@ pre-build the transaction, but it cannot act for the owner.
 
 ## Verifying a lock
 
+The owner key is **the same key that signed the declaration** — see the
+registration format. Nothing extra ties a lock to a member: hash the owner key
+and the member's address falls out.
+
 Given a lock address, an owner key, a co-signer key and a locktime:
 
 1. Rebuild the witness script exactly as above.

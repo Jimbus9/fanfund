@@ -10,7 +10,7 @@ import * as bitcoin from "../lock/node_modules/bitcoinjs-lib/src/index.js";
 import { ECPairFactory } from "../lock/node_modules/ecpair/src/index.js";
 import * as ecc from "../lock/node_modules/tiny-secp256k1/lib/index.js";
 import bitcoinMessage from "../lock/node_modules/bitcoinjs-message/index.js";
-import { verifyMembership, encodeP2WPKH, hash160 } from "./verify.mjs";
+import { verifyMembership, encodeP2WPKH, hash160, memberAddressForOwnerKey } from "./verify.mjs";
 
 const ECPair = ECPairFactory(ecc);
 const NET = bitcoin.networks.bitcoin;
@@ -92,6 +92,19 @@ const legacySig = bitcoinMessage.sign(STATEMENT, priv, kp.compressed).toString("
 const legacy = verifyMembership({ address, signature: legacySig, message: STATEMENT });
 check("Legacy-header signature from the same key", legacy.valid, true,
   "wallets differ on the header byte; both must work");
+
+// --- One key does both jobs -----------------------------------------------
+// The key that signs the declaration is the key that owns the locks, so a lock
+// resolves to its member with nothing extra published.
+
+const ownerPubkeyHex = Buffer.from(kp.publicKey).toString("hex");
+check("A lock's owner key resolves to the address that signed",
+  memberAddressForOwnerKey(ownerPubkeyHex) === address, true, address);
+check("Bytes and hex give the same answer",
+  memberAddressForOwnerKey(Buffer.from(kp.publicKey)) === memberAddressForOwnerKey(ownerPubkeyHex), true);
+check("An uncompressed key is refused",
+  (() => { try { memberAddressForOwnerKey("04" + "11".repeat(64)); return false; } catch { return true; } })(),
+  true, "a lock script needs 33 bytes");
 
 console.log("\n" + "-".repeat(72));
 console.log(failures === 0

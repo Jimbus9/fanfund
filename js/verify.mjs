@@ -114,6 +114,24 @@ function b64ToBytes(b64) {
  * Returns { valid, reason, derived } — on failure, `derived` is the address the
  * signature actually belongs to, which is usually the most useful thing to see.
  */
+/**
+ * The member address that owns a lock.
+ *
+ * The key that signs the declaration is the key that owns the locks, so a lock
+ * is tied to a member with no extra registration and no second signature:
+ * hash the lock's owner public key and the member's address falls out. See
+ * spec/registration-format.md.
+ *
+ * ownerPubkey: 33-byte compressed key, as hex or bytes.
+ */
+export function memberAddressForOwnerKey(ownerPubkey, hrp = "bc") {
+  const bytes = typeof ownerPubkey === "string"
+    ? Uint8Array.from(ownerPubkey.match(/../g).map((h) => parseInt(h, 16)))
+    : Uint8Array.from(ownerPubkey);
+  if (bytes.length !== 33) throw new Error("owner key must be 33 bytes (compressed)");
+  return encodeP2WPKH(hash160(bytes), hrp);
+}
+
 export function verifyMembership({ address, signature, message, hrp = "bc" }) {
   let sig;
   try {
