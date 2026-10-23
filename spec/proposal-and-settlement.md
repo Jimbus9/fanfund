@@ -30,7 +30,7 @@ A published document containing, at a minimum:
 
 | Field | |
 | --- | --- |
-| `destination` | A single address, which **must** already be on the published destinations list |
+| `destination` | A single address, which **must** already be on the published destinations list — see the destinations format |
 | `requires` | The amount needed, in pounds, and what it buys |
 | `target` | The equivalent in bitcoin, at a stated rate and moment |
 | `opens` / `closes` | The gathering window. `closes` is a deadline, not a duration |
@@ -95,6 +95,8 @@ can be bound to a specific purchase for years is wrong.
 ## A commitment
 
 A commitment is **one transaction, spending one lock, signed by its owner only**.
+Its record, its eight verification steps and how a pile is counted are in the
+**commitment format**; what follows is what it means.
 
 It is not a payment. It is the owner's half of a transaction nobody has
 broadcast. The coins stay in the lock, at the same address, with the same

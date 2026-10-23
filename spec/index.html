@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The documents — Liverpool Fan Fund</title>
-<meta name="description" content="The five documents that define the fan fund: the declaration, the registration format, the counting rule, the lock format, and the proposal and settlement format.">
+<meta name="description" content="The seven documents that define the fan fund: the declaration, the registration format, the counting rule, the lock format, proposals and settlement, commitments, and the published destinations list.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
@@ -27,7 +27,7 @@
   <header class="page">
     <span class="eyebrow">For anyone building their own</span>
     <h1>The documents</h1>
-    <p class="lede">The movement is these five documents, not any piece of software. Anyone holding them can build their own app, their own register, or take part with neither.</p>
+    <p class="lede">The movement is these seven documents, not any piece of software. Anyone holding them can build their own app, their own register, or take part with neither.</p>
   </header>
 
   <section>
@@ -54,8 +54,18 @@
       </div>
       <div class="card">
         <b class="head">5 · Proposal and settlement format</b>
-        <p>How committed money is actually spent. There is no vote — a proposal is funded or it is not. The window, what a commitment is, how settlement is paced, and what happens when a proposal fails.</p>
+        <p>How committed money is actually spent. There is no vote — a proposal is funded or it is not. The window, how settlement is paced, and what happens when a proposal fails.</p>
         <p class="note"><a href="proposal-and-settlement.md">proposal-and-settlement.md</a> · v1</p>
+      </div>
+      <div class="card">
+        <b class="head">6 · Commitment format</b>
+        <p>The record by which a supporter backs one purchase: one transaction, signed by its owner and nobody else, which cannot move a coin until the co-signer adds the second signature. Eight verification steps, seven of which need no network.</p>
+        <p class="note"><a href="commitment-format.md">commitment-format.md</a> · v1</p>
+      </div>
+      <div class="card">
+        <b class="head">7 · Published destinations format</b>
+        <p>The only addresses committed money may be sent to, and the whole defence against a forged proposal. Append-only, hash-chained, separately signed, and subject to a fourteen-day wait before any proposal may name an address.</p>
+        <p class="note"><a href="destinations-format.md">destinations-format.md</a> · v1 · list: <a href="../destinations.json">destinations.json</a></p>
       </div>
     </div>
   </section>
@@ -80,6 +90,9 @@ cd lock &amp;&amp; npm install &amp;&amp; node selftest.mjs
 # the taproot form of the same lock
 node taproot.test.mjs
 
+# commitments, and the destinations list that guards them
+node commitment.test.mjs
+
 # the lock's enforcement, on testnet with free coins
 node run-testnet.mjs</pre>
     <p class="note">The declaration's fingerprint can be reproduced from the published text with the canonicalisation rules in the registration format. Nothing here asks to be believed.</p>
@@ -95,6 +108,8 @@ node run-testnet.mjs</pre>
         <tr><td>Counting rule</td><td class="num">2</td><td>23 October 2026</td></tr>
         <tr><td>Lock format</td><td class="num">1</td><td>22 October 2026</td></tr>
         <tr><td>Proposal and settlement format</td><td class="num">1</td><td>23 October 2026</td></tr>
+        <tr><td>Commitment format</td><td class="num">1</td><td>23 October 2026</td></tr>
+        <tr><td>Published destinations format</td><td class="num">1</td><td>23 October 2026</td></tr>
       </tbody>
     </table></div>
     <p class="note">Every change to any of these is in the public commit history. A new version of the declaration would be published alongside its reason, and members asked whether they wish to sign it — never applied retrospectively to signatures made over different words.</p>

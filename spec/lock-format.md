@@ -87,10 +87,11 @@ defence against a forged proposal. Stealing committed money would require the
 published list to be corrupted as well, not merely a convincing-looking
 proposal to be put up.
 
-The list is kept in the project repository, where every entry is timestamped,
-the whole history is public, and an alteration to an existing entry shows in
-the diff. Each entry is signed. An address must appear on the list for a
-stated minimum period before commitments to it can open.
+The list is `destinations.json` in the project repository, and it has its own
+specification: **published destinations format**. In short, it is append-only
+and hash-chained, each entry is separately signed by keys that are **never** the
+co-signing key, and an address must have been publicly visible for fourteen days
+before a proposal may name it.
 
 ## Expiry
 
