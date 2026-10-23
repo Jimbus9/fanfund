@@ -1,6 +1,11 @@
 # Counting rule
 
-**Version 1 · 22 October 2026**
+**Version 2 · 23 October 2026**
+
+*Changed in v2: the vote-tally section is removed. Spending is decided by funding
+rather than by a vote, so there is nothing to weigh or count. See "There are no
+vote tallies" below for why, and the proposal and settlement format for what
+replaced it.*
 
 How every number this movement publishes is computed. Two people applying this
 document to the same public data must reach the same answer. If they do not,
@@ -91,30 +96,32 @@ committed total, because the two describe the same group of people.
 Where only one figure is given, it must be the committed one, and it must be
 labelled.
 
-## Vote tallies
+## There are no vote tallies
 
-Weight is committed money, measured at a **block height declared when the vote
-opens** and published with the proposal.
+Spending is not decided by a vote, so there is nothing to tally. A supporter who
+wants a purchase signs their own coins into it; one who does not, does nothing.
+Declaration principle 6 — *spending is weighted by what each member has
+committed* — is satisfied by arithmetic rather than by counting, which removes a
+step that could be got wrong or argued over.
 
-```
-weight(member) = Σ (balance of their locks in state "locked" at that height)
-```
+An earlier version of this document specified vote weights measured at a declared
+block height. That machinery was inherited from a design in which money sat in a
+pool and somebody had to be told where to send it. Nobody holds anybody's money
+here, so there was nothing left for it to instruct.
 
-Fixing the height in advance is what makes a result reproducible: two people
-counting independently reach the same answer, because they are counting the
-same chain state rather than whatever the chain happened to look like when each
-of them looked.
+How a proposal is published, funded and settled is in the **proposal and
+settlement format**. What this document still governs is the only figure that
+matters to it: the running total of commitments, which is computed from the
+published pile of signatures rather than from the chain, and must never be summed
+across proposals.
 
-- A lock that lapses after the declared height still carries its weight for
-  that vote. The snapshot is the snapshot.
-- A lock created after the declared height carries no weight in that vote.
-- The full tally — every vote, every weight, every total — is published so that
-  anybody can recount it from public data alone.
+Influence cannot be rented in any case, because committed money cannot be
+borrowed for an afternoon. That is why no decay curve, holding-period formula or
+anti-gaming measure appears anywhere: the lock already does that work.
 
-Influence cannot be rented under this rule, because committed money cannot be
-borrowed for an afternoon. That is why no decay curve, holding-period formula
-or anti-gaming measure appears anywhere in this document: the lock already does
-that work.
+The one place a genuine ballot survives is **directing the club** — one member,
+one vote, inside the society's own rules, because a decision that moves no money
+cannot be funded. That exists only once a stake does, and is not specified here.
 
 ## Figures that must not be published
 

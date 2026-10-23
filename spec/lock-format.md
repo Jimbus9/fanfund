@@ -60,6 +60,14 @@ Fixed options rather than free choice: free choice scatters expiry dates across
 a register nobody can read at a glance, and the point of the register is that
 it can be read.
 
+**Length is a genuine trade, in both directions.** A longer lock counts for more
+and signals more. It also extends the period during which an outstanding
+commitment to a dead proposal could, by a dishonest co-signer, still be
+completed — because the locktime is when an owner regains the ability to kill
+such a commitment by moving the coin alone. See the proposal and settlement
+format. This must be presented to a supporter at the moment they choose, not
+buried.
+
 ## Top-ups
 
 A top-up is a **new lock**, not an extension of an existing one.
