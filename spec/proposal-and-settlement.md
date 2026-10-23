@@ -33,12 +33,17 @@ A published document containing, at a minimum:
 | `destination` | A single address, which **must** already be on the published destinations list |
 | `requires` | The amount needed, in pounds, and what it buys |
 | `target` | The equivalent in bitcoin, at a stated rate and moment |
-| `opens` / `closes` | The gathering window |
-| `settles_by` | The end of the settlement window |
+| `opens` / `closes` | The gathering window. `closes` is a deadline, not a duration |
+| `settles_by` | The last date on which any commitment to this proposal may be completed |
 
 `requires` is the binding figure, because it is a price quoted by somebody else.
 `target` is an indicative running goal and is restated as the bitcoin price
 moves.
+
+**`requires` is written with a margin.** Some commitments will not settle — a
+lapsed lock taken home, a supporter who moved their coins, a transaction that
+cannot be confirmed in time. The margin is built into the figure when the
+proposal is written rather than handled by a further round of gathering.
 
 **This is not a breach of the counting rule.** That document forbids publishing a
 pound figure as authoritative *about the fund*. A seller's price is not a
@@ -54,15 +59,34 @@ destroyed every signature gathered so far.
 
 ## The window
 
-**Four weeks to gather. Up to two weeks to settle.**
+**Up to four weeks to gather, then up to two weeks to settle.**
 
-Signing does not touch the blockchain, so network conditions do not constrain
-gathering. What constrains it is people: a global support includes supporters who
-look at this once a fortnight, who work nights, who are away. Four weeks reaches
-them. Two does not.
+### Why it is two phases and not one
 
-Six weeks is also the ceiling for the reasons below — fee estimates drift, and a
-commitment is binding while the window is open.
+Settlement cannot begin until `requires` is met. A co-signer completing
+commitments as they arrived would be sending money to the destination for a
+purchase that might never be funded — and the destination is not ours to reverse.
+The threshold forces the order: all of the gathering, then any of the settling.
+
+The two dates also bind different parties. `closes` is a deadline for
+**supporters** — sign by then or not at all. `settles_by` is a deadline for the
+**co-signer and whoever broadcasts** — complete it or declare it dead by then. A
+single combined date would leave it ambiguous who was late, and would let the
+settlement runway be squeezed to nothing by a proposal funded the day before.
+
+### Gathering closes as soon as the target is met
+
+`closes` is the *last* date, not a duration to be served out. The moment
+`requires` is met, gathering ends and settlement begins. A proposal funded on day
+three does not hold anybody for another twenty-five days.
+
+**Four weeks** is the outer limit because signing does not touch the blockchain,
+so nothing about the network constrains gathering. What constrains it is people:
+a global support includes supporters who look at this once a fortnight, who work
+nights, who are away. Four weeks reaches them; two does not.
+
+**Six weeks in total** is the ceiling because fee estimates drift and a commitment
+is binding for as long as the proposal is open.
 
 **A proposal window is weeks, never years.** The lock is the long commitment; a
 commitment to a proposal is a short final step. Any design in which a supporter
@@ -105,8 +129,9 @@ key that signed. Both checks are mechanical.
 There is no way to withdraw a commitment. You cannot un-sign, and while your lock
 is in date you cannot move those coins elsewhere.
 
-**This must be stated plainly wherever a supporter commits.** It is bounded — six
-weeks at most — but it is real, and a supporter who did not understand it was
+**This must be stated plainly wherever a supporter commits.** The bound period is
+six weeks at worst and usually far less, since gathering ends the moment the
+target is met. But it is real, and a supporter who did not understand it was
 misled.
 
 A withdrawal mechanism was designed and rejected. It would have required the
