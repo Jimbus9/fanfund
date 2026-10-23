@@ -42,6 +42,26 @@ The result is 65 bytes, base64 encoded.
 The second route exists because a signature cannot be forged and needs nobody's
 permission to pass on. No operator of anything can keep a member out.
 
+## One key does both jobs
+
+**The key that signs the declaration is the same key that owns your locks.**
+
+A lock's script names its owner's public key. Hash that key and you have the
+address that signed the declaration. So a lock is tied to a member with no extra
+registration, no second signature and no extra step — the tie is derivable by
+anybody, from data already published.
+
+This is deliberate, and it is safe. Message signing hashes its input behind a
+fixed `"Bitcoin Signed Message:\n"` prefix, which is what stops a signature made
+for a message being replayed as a signature for a transaction. Nonces are derived
+from the key *and* the message, so signing both with one key leaks nothing. And a
+signature over a message cannot spend anything: a lock needs a transaction
+signature, and additionally the co-signer or the lock's own date.
+
+One consequence: **a lock's owner key must be compressed**, because the lock
+script requires 33 bytes. A registration made with an uncompressed legacy key
+still counts as membership, but cannot be tied to a lock. Use `bc1q`.
+
 ## Address types
 
 | Type | Prefix | Accepted |
