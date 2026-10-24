@@ -1,6 +1,6 @@
 # Lock format
 
-**Version 1 · 22 October 2026**
+**Version 1 · 24 October 2026**
 
 A lock is how a supporter commits money without anyone taking custody of it.
 It is an ordinary Bitcoin output with a script that permits exactly two ways

@@ -1,11 +1,6 @@
 # Counting rule
 
-**Version 2 · 23 October 2026**
-
-*Changed in v2: the vote-tally section is removed. Spending is decided by funding
-rather than by a vote, so there is nothing to weigh or count. See "There are no
-vote tallies" below for why, and the proposal and settlement format for what
-replaced it.*
+**Version 1 · 24 October 2026**
 
 How every number this movement publishes is computed. Two people applying this
 document to the same public data must reach the same answer. If they do not,
