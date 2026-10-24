@@ -125,6 +125,17 @@ Assigned in the order registrations are accepted, starting at 1, never reused.
 A number is a record of arrival and nothing more — it carries no weight, no
 priority and no privilege, per principle 7 of the declaration.
 
+**No test data ever enters the register.** Not a placeholder, not an example, not
+a developer trying something out. A number is permanent and never reissued, so an
+entry added and later removed would leave a hole and shift nothing — but an entry
+added, numbered, and removed *before* real members arrive would silently consume
+numbers that belong to people. Test registrations live in the test suite, against
+throwaway keys, and never in `registrations.json`.
+
+The same goes for anything on a test network. Testnet coins, testnet keys and
+testnet locks are worthless by design and have no relationship to membership. The
+register records mainnet signatures over the declaration and nothing else.
+
 ## Versioning
 
 A registration is bound to the declaration version named in the statement it
