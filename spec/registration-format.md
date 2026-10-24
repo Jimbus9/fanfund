@@ -1,6 +1,6 @@
 # Registration format
 
-**Version 1 · 22 October 2026**
+**Version 1 · 24 October 2026**
 
 A registration is the whole of membership. It is two fields.
 

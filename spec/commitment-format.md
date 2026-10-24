@@ -1,6 +1,6 @@
 # Commitment format
 
-**Version 1 · 23 October 2026**
+**Version 1 · 24 October 2026**
 
 A commitment is how a supporter backs one specific purchase with their own
 locked money. What a proposal is and how it settles is in the **proposal and

@@ -1,6 +1,6 @@
 # Proposal and settlement format
 
-**Version 1 · 23 October 2026**
+**Version 1 · 24 October 2026**
 
 How money committed to this fund is actually spent.
 

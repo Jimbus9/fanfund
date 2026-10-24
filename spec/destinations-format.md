@@ -1,6 +1,6 @@
 # Published destinations format
 
-**Version 1 · 23 October 2026**
+**Version 1 · 24 October 2026**
 
 The only addresses committed money may ever be sent to.
 

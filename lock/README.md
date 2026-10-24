@@ -147,7 +147,7 @@ cannot move a coin, because the purchase exit needs the co-signer too, so it can
 be published and copied freely by anybody. Three operations: the supporter
 builds one, anybody verifies one, and at settlement the co-signer completes it.
 
-`commitment.test.mjs` runs 31 checks offline. Most of them assert a
+`commitment.test.mjs` runs 34 checks offline. Most of them assert a
 **rejection**, because that is where the value is: a tampered destination, a
 forged owner signature, a destination nobody attested, one that has not waited
 out its fourteen days, a revoked one, a declared locktime, a fee large enough to
