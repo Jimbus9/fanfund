@@ -47,14 +47,18 @@ const utxo = { txid: "a".repeat(64), vout: 0, value: 1_000_000 };
 const DEST = bitcoin.payments.p2wpkh({ pubkey: cosignerPubkey, network: NETWORK }).address;
 const OTHER = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(strangerKey.publicKey), network: NETWORK }).address;
 
+// This instance's identity: the declaration's SHA-256.
+const INSTANCE = "51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340";
+const OTHER_INSTANCE = "b".repeat(64);
+
 const e1 = {
-  index: 1, op: "add", address: DEST,
+  instance: INSTANCE, index: 1, op: "add", address: DEST,
   text: "Society receiving address for the stake purchase",
   added: "2026-11-01T12:00:00Z", prev: ZERO_PREV,
   firstSeen: "2026-11-01T12:00:00Z",
 };
 const e2 = {
-  index: 2, op: "add", address: OTHER,
+  instance: INSTANCE, index: 2, op: "add", address: OTHER,
   text: "A second address, added only recently",
   added: "2026-11-20T12:00:00Z", prev: destinationHash(e1),
   firstSeen: "2026-11-20T12:00:00Z",
@@ -92,12 +96,22 @@ const unknown = destinationIsPermitted({
 check("An address not on the list at all is refused", unknown.permitted, false, unknown.reason);
 
 const revokedList = [...LIST, {
-  index: 3, op: "revoke", address: DEST, text: "Compromised",
+  instance: INSTANCE, index: 3, op: "revoke", address: DEST, text: "Compromised",
   added: "2026-11-21T00:00:00Z", prev: destinationHash(e2),
   firstSeen: "2026-11-21T00:00:00Z",
 }];
 const revoked = destinationIsPermitted({ address: DEST, entries: revokedList, opensAt: "2026-12-01T00:00:00Z" });
 check("A revoked destination is refused", revoked.permitted, false, revoked.reason);
+
+check("An entry from another instance breaks the chain",
+  chainIsIntact([e1, { ...e2, instance: OTHER_INSTANCE }]).ok, false,
+  "a signature made for one instance cannot verify against another");
+check("The same entry under a different instance hashes differently",
+  destinationHash(e1) === destinationHash({ ...e1, instance: OTHER_INSTANCE }), false,
+  "so the attestation does not carry across");
+check("A line with no instance is refused",
+  (() => { try { destinationLine({ ...e1, instance: undefined }); return false; } catch { return true; } })(),
+  true, "every entry is bound to its declaration");
 
 // A backdated `added` must not buy age. firstSeen is what counts.
 const backdated = [{ ...e2, index: 1, prev: ZERO_PREV, added: "2026-01-01T00:00:00Z" }];

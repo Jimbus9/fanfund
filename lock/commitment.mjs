@@ -34,11 +34,19 @@ const sha256 = (buf) => createHash("sha256").update(buf).digest();
 // The destinations list
 // ---------------------------------------------------------------------------
 
-/** The canonical line that gets hashed and signed. One per entry. */
-export function destinationLine({ index, op, address, text, added, prev }) {
-  if (/[|\n\r]/.test(text)) throw new Error("text may not contain | or a newline");
-  if (/[|\n\r]/.test(address)) throw new Error("address may not contain | or a newline");
-  return `${index}|${op}|${address}|${text}|${added}|${prev}`;
+/**
+ * The canonical line that gets hashed and signed. One per entry.
+ *
+ * `instance` is the SHA-256 of this instance's declaration. It is in the line
+ * so that an attestation signed for one instance cannot verify against another
+ * — anybody may copy these documents, and several instances may run at once.
+ */
+export function destinationLine({ instance, index, op, address, text, added, prev }) {
+  if (!/^[0-9a-f]{64}$/.test(instance ?? "")) throw new Error("instance must be a 64-character hex declaration hash");
+  for (const [name, v] of [["text", text], ["address", address]]) {
+    if (/[|\n\r]/.test(v)) throw new Error(`${name} may not contain | or a newline`);
+  }
+  return `${instance}|${index}|${op}|${address}|${text}|${added}|${prev}`;
 }
 
 export const ZERO_PREV = "0".repeat(64);
@@ -48,7 +56,8 @@ export function destinationHash(entry) {
 }
 
 export function attestationStatement(entry) {
-  return `I attest Fan Fund destination entry ${entry.index} (sha256:${destinationHash(entry)}).`;
+  // The instance needs no mention: the line this hashes already carries it.
+  return `I attest destination entry ${entry.index} (sha256:${destinationHash(entry)}).`;
 }
 
 /**
@@ -57,8 +66,10 @@ export function attestationStatement(entry) {
  */
 export function chainIsIntact(entries) {
   let expected = ZERO_PREV;
+  const instance = entries[0]?.instance;
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
+    if (e.instance !== instance) return { ok: false, reason: `entry ${e.index} belongs to a different instance` };
     if (e.index !== i + 1) return { ok: false, reason: `entry at position ${i} has index ${e.index}, expected ${i + 1}` };
     if (e.prev !== expected) return { ok: false, reason: `entry ${e.index} chains to ${e.prev.slice(0, 12)}…, expected ${expected.slice(0, 12)}…` };
     expected = destinationHash(e);

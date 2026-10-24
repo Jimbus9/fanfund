@@ -41,11 +41,12 @@ The container is JSON for convenience. **The thing that is signed is a single
 canonical line of text**, which any language can reproduce exactly:
 
 ```
-index|op|address|text|added|prev
+instance|index|op|address|text|added|prev
 ```
 
 | Field | |
 | --- | --- |
+| `instance` | The SHA-256 of this instance's declaration. See **running your own** |
 | `index` | Decimal, starting at 1, never reused, never skipped |
 | `op` | `add` or `revoke` |
 | `address` | The destination, or for a revocation the address being revoked |
@@ -59,8 +60,18 @@ trailing whitespace, no trailing newline on the line itself.
 An example first entry:
 
 ```
-1|add|bc1qexampleaddressgoeshere|Society receiving address for the stake purchase|2026-11-01T12:00:00Z|0000000000000000000000000000000000000000000000000000000000000000
+51f4b86e…b413340|1|add|bc1qexampleaddressgoeshere|Receiving address for the stake purchase|2026-11-01T12:00:00Z|0000000000000000000000000000000000000000000000000000000000000000
 ```
+
+(the `instance` field is the full 64-character hash; abbreviated here only to fit
+the page)
+
+**Why the instance is in the line.** Anyone may copy these documents for their
+own club or cause, and several instances may run at once. Without this field, two
+instances could in principle produce an identical line, and an attestation signed
+for one would verify against the other. Binding every entry to its declaration's
+hash makes a signature meaningless outside the instance it was made for — the
+same property a registration already has, for the same reason.
 
 ## Attestation
 
@@ -68,8 +79,11 @@ An entry is attested by signing this statement with the Bitcoin Signed Message
 convention, exactly as a registration signs the declaration:
 
 ```
-I attest Fan Fund destination entry 1 (sha256:<hash of the line>).
+I attest destination entry 1 (sha256:<hash of the line>).
 ```
+
+The instance needs no mention here, because the line it hashes already carries
+it.
 
 Deliberately the same mechanism as a registration, so the verifier already
 written for the register verifies these too. No new cryptography enters the
@@ -146,7 +160,8 @@ none is a judgement call.
 
 Anybody, with no permission and nothing but the repository:
 
-1. Rebuild each entry's canonical line from the fields.
+1. Rebuild each entry's canonical line from the fields, including this
+   instance's declaration hash.
 2. Hash it, and confirm the next entry's `prev` matches.
 3. Verify each attestation against the published attestor addresses, using the
    same verifier the register uses.
