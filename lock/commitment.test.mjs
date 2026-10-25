@@ -243,6 +243,11 @@ rejects("Lock address does not match the stated keys",
   verifyWith({ ...record, lock: { ...record.lock, locktime: LOCKTIME + 1 } }),
   "does not re-derive");
 
+// a "lock" whose owner is also its co-signer is no lock at all
+rejects("A lock whose owner key is also the co-signer key",
+  verifyWith({ ...record, lock: { ...record.lock, cosigner_pubkey: record.lock.owner_pubkey } }),
+  "must be different keys");
+
 // an absurd fee
 const greedy = buildCommitment({
   utxo, witnessScript: lock.witnessScript, destination: DEST,

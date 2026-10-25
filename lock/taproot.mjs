@@ -18,6 +18,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairFactory } from "ecpair";
 import * as ecc from "tiny-secp256k1";
+import { assertDistinctKeys } from "./lock.mjs";
 
 bitcoin.initEccLib(ecc);
 export const ECPair = ECPairFactory(ecc);
@@ -58,6 +59,7 @@ export function purchaseLeaf({ ownerXOnly, cosignerXOnly }) {
 }
 
 export function lockTaproot({ ownerPubkey, cosignerPubkey, locktime, network }) {
+  assertDistinctKeys(ownerPubkey, cosignerPubkey); // see lock.mjs
   const ownerXOnly = toXOnly(ownerPubkey);
   const cosignerXOnly = toXOnly(cosignerPubkey);
 

@@ -114,9 +114,16 @@ and the member's address falls out.
 
 Given a lock address, an owner key, a co-signer key and a locktime:
 
-1. Rebuild the witness script exactly as above.
-2. Derive the P2WSH address from it.
-3. The lock is genuine if and only if the derived address matches.
+1. Check the owner key and the co-signer key are different keys. If they are
+   the same — or one is the other's mirror image, sharing its x-coordinate — it
+   is not a lock: one person could supply both purchase signatures and move the
+   coin at any time. It is not counted.
+2. Rebuild the witness script exactly as above.
+3. Derive the P2WSH address from it.
+4. The lock is genuine if and only if the derived address matches.
+
+The co-signer therefore cannot lock their own coins with their co-signing key.
+Anyone who is both a member and a co-signer uses a separate key for each role.
 
 Changing any single element — either key, the locktime, the order of the keys —
 produces a different address. A lock therefore commits to its own terms, and
