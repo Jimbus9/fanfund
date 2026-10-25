@@ -17,6 +17,7 @@
 // It is resumable. Run it, fund the two addresses it prints, run it again.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as bitcoin from "bitcoinjs-lib";
 import {
   ECPair, lockAddress, buildSpend, describeLocktime, networkFor,
@@ -24,7 +25,10 @@ import {
 
 const API = process.env.FANFUND_API || "https://mempool.space/testnet4/api";
 const NETWORK = networkFor("testnet");
-const STATE = new URL("./lock-state.json", import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows .pathname yields "/C:/Users/..."
+// and the leading slash makes Node resolve it against the current drive,
+// producing "C:\\C:\\Users\\...". Linux never shows the bug.
+const STATE = fileURLToPath(new URL("./lock-state.json", import.meta.url));
 const FEE = 400;        // sats; testnet is cheap
 const MIN_UTXO = 2000;  // sats; anything smaller is not worth spending
 
