@@ -70,6 +70,15 @@ check("A different locktime gives a different address", other.address !== lock.a
 const swapped = lockTaproot({ ownerPubkey: cosignerPubkey, cosignerPubkey: ownerPubkey, locktime: LOCKTIME, network: NETWORK });
 check("Swapping the keys gives a different address", swapped.address !== lock.address, true);
 
+const refuses = (fn) => { try { fn(); return false; } catch { return true; } };
+const mirror = Buffer.from(ownerPubkey); mirror[0] ^= 1; // 02 <-> 03, same x-only key
+check("Refuses the same key as owner AND co-signer",
+  refuses(() => lockTaproot({ ownerPubkey, cosignerPubkey: ownerPubkey, locktime: LOCKTIME, network: NETWORK })), true,
+  "otherwise one person could spend early");
+check("Refuses the key's mirror image as co-signer",
+  refuses(() => lockTaproot({ ownerPubkey, cosignerPubkey: mirror, locktime: LOCKTIME, network: NETWORK })), true,
+  "taproot sees them as one key");
+
 // --- Spending --------------------------------------------------------------
 
 const utxo = { txid: "a".repeat(64), vout: 0, value: 100_000 };

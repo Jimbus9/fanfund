@@ -94,6 +94,16 @@ const swapped = lockAddress({
 check("Swapping the two keys gives a different address", swapped !== address, true,
   "the roles are not interchangeable");
 
+// One key in both roles would let one person supply both purchase signatures
+// and move the coin before its date. Building such a lock must be refused.
+const refuses = (fn) => { try { fn(); return false; } catch { return true; } };
+const mirror = Buffer.from(fanPubkey); mirror[0] ^= 1; // 02 <-> 03, same x
+check("Refuses the same key as fan AND co-signer",
+  refuses(() => lockAddress({ fanPubkey, cosignerPubkey: fanPubkey, locktime: LOCKTIME, network: NETWORK })), true,
+  "otherwise one person could spend early");
+check("Refuses the key's mirror image as co-signer",
+  refuses(() => lockAddress({ fanPubkey, cosignerPubkey: mirror, locktime: LOCKTIME, network: NETWORK })), true);
+
 // --- The four attempts -----------------------------------------------------
 
 const utxo = { txid: "a".repeat(64), vout: 0, value: 100_000 };

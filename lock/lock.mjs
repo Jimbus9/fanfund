@@ -50,11 +50,30 @@ export function networkFor(name) {
   throw new Error(`unknown network: ${name}`);
 }
 
+/**
+ * The owner and the co-signer must be two different keys.
+ *
+ * If they were the same, one person could supply both purchase signatures and
+ * move the coin at any time — the lock would silently stop being a lock, and
+ * the register would still count it as locked. Babylon's staking scripts refuse
+ * the same thing for the same reason.
+ *
+ * Compared on the x-coordinate alone, because a key and its mirror image share
+ * it, and whoever holds one private key can trivially derive the other's.
+ */
+export function assertDistinctKeys(ownerPubkey, cosignerPubkey) {
+  const x = (k) => Buffer.from(k).subarray(k.length === 33 ? 1 : 0);
+  if (x(ownerPubkey).equals(x(cosignerPubkey))) {
+    throw new Error("owner and co-signer must be different keys");
+  }
+}
+
 /** Build the witness script holding both exits. */
 export function lockScript({ fanPubkey, cosignerPubkey, locktime }) {
   if (fanPubkey.length !== 33) throw new Error("fan pubkey must be 33 bytes (compressed)");
   if (cosignerPubkey.length !== 33) throw new Error("co-signer pubkey must be 33 bytes (compressed)");
   if (!Number.isInteger(locktime) || locktime <= 0) throw new Error("locktime must be a positive integer");
+  assertDistinctKeys(fanPubkey, cosignerPubkey);
 
   return script.compile([
     opcodes.OP_IF,
