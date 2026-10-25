@@ -80,7 +80,7 @@ fully specified.
 
 | Parameter | What it is | This instance |
 | --- | --- | --- |
-| `declaration` | Canonical text and its SHA-256. **This is your instance's identity** | `declaration-v1.txt`, `51f4b86e…b413340` |
+| `declaration` | Canonical text and its SHA-256. **This is your instance's identity** | `declaration-v1.txt`, `3a0a0bca…6209b96` |
 | `network` | Which chain | Bitcoin mainnet |
 | `unit` | Unit of account for every published figure | Bitcoin |
 | `lock_lengths` | The fixed options a member may choose | 1, 3 or 5 years |

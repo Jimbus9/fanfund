@@ -1,6 +1,6 @@
 // Verifying a membership signature.
 //
-// This is the only piece of cryptography the fan fund asks anyone to trust,
+// This is the only piece of cryptography The Kop Fund asks anyone to trust,
 // and it runs in your own browser rather than on our server. Given an address
 // and a signature, it answers one question: did the holder of that address
 // sign this exact declaration?

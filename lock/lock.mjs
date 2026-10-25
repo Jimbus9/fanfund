@@ -1,4 +1,4 @@
-// The fan fund lock.
+// The Kop Fund lock.
 //
 // A locked coin can leave in exactly two directions and no others:
 //

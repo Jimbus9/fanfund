@@ -22,7 +22,7 @@ they own.
 **1. The signing statement.** For declaration v1:
 
 ```
-I agree to the Fan Fund Declaration v1 (sha256:51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340) and join as a member.
+I agree to the Supporters' Declaration v1 (sha256:3a0a0bca96ec2161d98ff9da05ae885d6b8d68e55ed412bc85dcc7fb16209b96) and join as a member.
 ```
 
 One line, no wrapping, no trailing whitespace. The fingerprint is the SHA-256
@@ -107,7 +107,7 @@ must reach the same fingerprint from the same words.
 4. Exactly one newline at the end of the file
 
 `declaration-v1.txt` is already canonical, so in practice a client hashes the
-published file rather than re-deriving it. Canonical length: **3,405 bytes**.
+published file rather than re-deriving it. Canonical length: **3,408 bytes**.
 
 ## Duplicates and multiple registrations
 

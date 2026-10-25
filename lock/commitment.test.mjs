@@ -48,7 +48,7 @@ const DEST = bitcoin.payments.p2wpkh({ pubkey: cosignerPubkey, network: NETWORK 
 const OTHER = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(strangerKey.publicKey), network: NETWORK }).address;
 
 // This instance's identity: the declaration's SHA-256.
-const INSTANCE = "51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340";
+const INSTANCE = "3a0a0bca96ec2161d98ff9da05ae885d6b8d68e55ed412bc85dcc7fb16209b96";
 const OTHER_INSTANCE = "b".repeat(64);
 
 const e1 = {

@@ -23,8 +23,8 @@ const check = (name, got, want, detail = "") => {
 };
 
 const STATEMENT =
-  "I agree to the Fan Fund Declaration v1 " +
-  "(sha256:51f4b86e0219a1b26a6e48642f74b4d87026159fd84e2d0fabd6f6046b413340) " +
+  "I agree to the Supporters' Declaration v1 " +
+  "(sha256:3a0a0bca96ec2161d98ff9da05ae885d6b8d68e55ed412bc85dcc7fb16209b96) " +
   "and join as a member.";
 
 console.log("\nVerifying our browser code against bitcoinjs-message\n" + "-".repeat(72));

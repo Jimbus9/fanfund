@@ -60,7 +60,7 @@ trailing whitespace, no trailing newline on the line itself.
 An example first entry:
 
 ```
-51f4b86e…b413340|1|add|bc1qexampleaddressgoeshere|Receiving address for the stake purchase|2026-11-01T12:00:00Z|0000000000000000000000000000000000000000000000000000000000000000
+3a0a0bca…6209b96|1|add|bc1qexampleaddressgoeshere|Receiving address for the stake purchase|2026-11-01T12:00:00Z|0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 (the `instance` field is the full 64-character hash; abbreviated here only to fit
