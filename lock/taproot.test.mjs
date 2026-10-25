@@ -3,6 +3,8 @@
 // Run:  node taproot.test.mjs
 
 import * as bitcoin from "bitcoinjs-lib";
+import miniscript from "@bitcoinerlab/miniscript";
+const { compileMiniscript } = miniscript;
 import {
   ECPair, lockTaproot, buildTaprootSpend, toXOnly, schnorrValid,
   UNSPENDABLE_INTERNAL_KEY, leafHash,
@@ -64,6 +66,19 @@ check("Purchase leaf requires BOTH keys",
 check("Co-signer absent from the going-home leaf",
   lock.leaves.home.includes(cosignerX), false,
   "they cannot block or delay a withdrawal");
+
+// Both leaves must be standard tapscript miniscript, byte for byte, so Bitcoin
+// Core and ordinary wallets can read and sign them without any code of ours.
+const asTapMiniscript = (m, leaf) => {
+  const r = compileMiniscript(m, { tapscript: true });
+  return r.issane && bitcoin.script.fromASM(r.asm.replace(/[<>]/g, "")).equals(leaf);
+};
+check("Going-home leaf is standard miniscript",
+  asTapMiniscript(`and_v(v:pk(${ownerX.toString("hex")}),after(${LOCKTIME}))`, lock.leaves.home), true,
+  "and_v(v:pk(owner),after(t))");
+check("Purchase leaf is standard miniscript",
+  asTapMiniscript(`and_v(v:pk(${ownerX.toString("hex")}),pk(${cosignerX.toString("hex")}))`, lock.leaves.purchase), true,
+  "and_v(v:pk(owner),pk(cosigner))");
 
 const other = lockTaproot({ ownerPubkey, cosignerPubkey, locktime: LOCKTIME + 1, network: NETWORK });
 check("A different locktime gives a different address", other.address !== lock.address, true);

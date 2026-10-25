@@ -15,22 +15,28 @@ A locked coin can leave in exactly two directions and no others.
 | **Going home** | The fan, alone | Only on or after the date they chose |
 | **Into a purchase** | The fan **and** the co-signer | Any time |
 
-Both live in one script. The spender picks a branch:
+Both live in one script, which reads: **the fan always signs, and then either
+the date has passed or the co-signer signs too.**
 
 ```
+<fan> OP_CHECKSIGVERIFY                   <- always, before anything else
 OP_IF
-  <locktime> OP_CHECKLOCKTIMEVERIFY OP_DROP
-  <fan> OP_CHECKSIG                       <- going home
+  <locktime> OP_CHECKLOCKTIMEVERIFY       <- going home
 OP_ELSE
-  <fan> OP_CHECKSIGVERIFY
   <cosigner> OP_CHECKSIG                  <- into a purchase
 OP_ENDIF
 ```
 
-The line that matters most is `OP_CHECKSIGVERIFY` followed by `OP_CHECKSIG`. It
-means the purchase branch needs **both** signatures. The co-signer can never
-move a coin alone — not with a court order, not with the fan's password, not
-ever. That is what makes them a check rather than a custodian.
+The line that matters most is the first. It runs before either route is
+chosen, so there is no way out of a lock without the fan's signature. The
+co-signer can never move a coin alone — not with a court order, not with the
+fan's password, not ever. That is what makes them a check rather than a
+custodian.
+
+It is written as standard **miniscript**, so Bitcoin Core and ordinary wallets
+can read and sign it without any code of ours. That is what lets the co-signer
+sign tens of thousands of commitments automatically on an offline computer,
+instead of approving each one by hand on a hardware wallet.
 
 And the co-signer does not appear in the going-home branch at all. They cannot
 refuse to let a fan out, delay it, or be asked to approve it. On the date, one
@@ -123,7 +129,7 @@ the date the lock would have expired:
 
 | | Revealed on-chain |
 | --- | --- |
-| P2WSH, either exit | 114 bytes — both branches |
+| P2WSH, either exit | 79 bytes — both branches |
 | Taproot, going home | 40 bytes — purchase branch stays private |
 | Taproot, into a purchase | 68 bytes — the date stays private |
 
