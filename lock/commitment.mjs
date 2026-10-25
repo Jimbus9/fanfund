@@ -147,7 +147,8 @@ export function buildCommitment({
   const ownerSig = bscript.signature.encode(Buffer.from(ownerKey.sign(sighash)), Transaction.SIGHASH_ALL);
 
   // Purchase branch, co-signer's slot empty until settlement.
-  tx.setWitness(0, [Buffer.alloc(0), ownerSig, Buffer.alloc(0), witnessScript]);
+  // Layout: [co-signer sig, branch selector, owner sig, script].
+  tx.setWitness(0, [Buffer.alloc(0), Buffer.alloc(0), ownerSig, witnessScript]);
 
   return { tx, hex: tx.toHex(), sighash, ownerSig };
 }
@@ -204,7 +205,7 @@ export function verifyCommitment({
   const w = tx.ins[0].witness;
   if (w.length !== 4) return fail(`witness has ${w.length} items, the purchase branch has 4`);
   if (w[0].length !== 0) return fail("the co-signer's slot is not empty — this is a completed spend, not a commitment");
-  if (w[2].length !== 0) return fail("branch selector is not empty, so this takes the going-home branch");
+  if (w[1].length !== 0) return fail("branch selector is not empty, so this takes the going-home branch");
   if (!w[3].equals(derived.witnessScript)) return fail("witness script is not the lock's script");
   note("purchase branch, co-signer's slot empty", true);
 
@@ -212,7 +213,7 @@ export function verifyCommitment({
   const sighash = tx.hashForWitnessV0(0, derived.witnessScript, utxoValue, Transaction.SIGHASH_ALL);
   let sigOk = false;
   try {
-    const decoded = bscript.signature.decode(w[1]);
+    const decoded = bscript.signature.decode(w[2]);
     sigOk = decoded.hashType === Transaction.SIGHASH_ALL &&
       ecc.verify(sighash, Buffer.from(record.lock.owner_pubkey, "hex"), decoded.signature);
   } catch { sigOk = false; }
@@ -295,7 +296,7 @@ export function completeCommitment({ record, cosignerKey, utxoValue, network }) 
   const sighash = tx.hashForWitnessV0(0, derived.witnessScript, utxoValue, Transaction.SIGHASH_ALL);
   const cosignerSig = bscript.signature.encode(Buffer.from(cosignerKey.sign(sighash)), Transaction.SIGHASH_ALL);
 
-  tx.setWitness(0, [cosignerSig, w[1], Buffer.alloc(0), w[3]]);
+  tx.setWitness(0, [cosignerSig, Buffer.alloc(0), w[2], w[3]]);
   return { tx, hex: tx.toHex(), txid: tx.getId(), sighash, cosignerSig };
 }
 

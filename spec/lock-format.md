@@ -15,27 +15,52 @@ out and no others.
 
 ## The script
 
-P2WSH, with both branches in one witness script:
+P2WSH, with both exits in one witness script. It reads: **the owner always
+signs, and then either the date has passed or the co-signer signs too.**
 
 ```
+<ownerPubkey> OP_CHECKSIGVERIFY
 OP_IF
-  <locktime> OP_CHECKLOCKTIMEVERIFY OP_DROP
-  <ownerPubkey> OP_CHECKSIG
+  <locktime> OP_CHECKLOCKTIMEVERIFY
 OP_ELSE
-  <ownerPubkey> OP_CHECKSIGVERIFY
   <cosignerPubkey> OP_CHECKSIG
 OP_ENDIF
 ```
 
-The spender selects a branch with the last witness item before the script: `01`
-for going home, an empty item for the purchase route.
+The spender selects a branch with the witness item beneath the owner's
+signature: `01` for going home, an empty item for the purchase route. In full,
+bottom of the stack first:
 
-**`OP_CHECKSIGVERIFY` followed by `OP_CHECKSIG` is the most important line in
-this specification.** It makes the purchase branch require *both* signatures.
-The co-signer can never move a coin alone.
+| Exit | Witness |
+| --- | --- |
+| Going home | `01`, owner's signature, script |
+| Into a purchase | co-signer's signature, empty, owner's signature, script |
+
+**The first line is the most important in this specification.** It runs before
+either branch is chosen, so no way out of a lock exists without the owner's
+signature. The co-signer can never move a coin alone.
 
 Note also what is *absent*: the co-signer does not appear in the going-home
 branch. They cannot block a withdrawal, delay one, or be asked to approve one.
+
+### Why it is written in this form
+
+The script is standard **miniscript**:
+`and_v(v:pk(owner),or_i(after(locktime),pk(cosigner)))`. Any wallet or tool that
+understands miniscript, including Bitcoin Core, can read a lock and sign for it
+with no code of ours.
+
+That matters most for the co-signer. A purchase may gather tens of thousands of
+commitments, each a separate transaction needing its own co-signature. No
+hardware wallet will approve that many one at a time. Instead the co-signing key
+lives on a dedicated computer that is never connected to the internet, running
+Bitcoin Core: the commitments arrive on a USB stick, every one is checked and
+signed automatically, and the signatures leave the same way. The co-signer makes
+one decision per proposal, which is all the role was ever meant to be.
+
+An earlier form of this lock named the owner's key in both branches. It behaved
+identically but is not valid miniscript, because miniscript refuses a key that
+appears twice. No real lock was ever made in that form.
 
 ## Locktime
 
@@ -46,7 +71,9 @@ exactly that moment — typically within an hour. Immaterial for a lock measured
 in years.
 
 A block height may be used instead and behaves identically. Heights are used
-in testing because they are exact.
+in testing because they are exact. An instance uses one or the other for every
+lock, never both: a single transaction cannot spend a date lock and a height
+lock together.
 
 A spend down the going-home branch must set the transaction's `nLockTime` to
 the lock's locktime, and `nSequence` below `0xffffffff` so that `nLockTime` is
@@ -139,7 +166,11 @@ Each exit lives in its own leaf of a tapscript tree rather than in two branches
 of one script, so a spend reveals only the leaf it used. Going home reveals 40
 bytes and never shows that a purchase exit existed; a purchase reveals 68 bytes
 and never shows the date the lock would have expired. The P2WSH form reveals all
-114 bytes of both branches on either spend.
+79 bytes of both branches on either spend.
+
+Both leaves are standard tapscript miniscript, for the same reason as the P2WSH
+form: going home is `and_v(v:pk(owner),after(locktime))`, a purchase is
+`and_v(v:pk(owner),pk(cosigner))`.
 
 The internal key is BIP-341's suggested unspendable point
 (`50929b74c1a0…803ac0`), so there is no key-path shortcut past the two leaves.
