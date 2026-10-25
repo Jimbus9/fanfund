@@ -9,6 +9,12 @@ nobody needs to tell us, and nothing is owed to anybody if it works.
 This document separates the **method** — which is general — from **this
 instance**, which happens to be about buying a stake in Liverpool Football Club.
 
+The method is called **Crowdlock**. It is a set of published rules, not a
+program: anyone can build software that follows them, or follow them with an
+ordinary wallet and no app at all. An instance is *a* Crowdlock, the way a
+particular society is a co-operative. **The Kop Fund is a Crowdlock.** Yours
+will be another, with its own name and its own declaration.
+
 ## The method is six documents and one declaration
 
 | | Document | General? |
