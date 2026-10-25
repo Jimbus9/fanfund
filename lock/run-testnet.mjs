@@ -122,8 +122,26 @@ const cosignerPubkey = Buffer.from(cosignerKey.publicKey);
 const payout = bitcoin.payments.p2wpkh({ pubkey: fanPubkey, network: NETWORK }).address;
 
 const height = await tipHeight();
-const LOCK_A = height + 50_000;        // years away at 10 minutes a block
-const LOCK_B = Math.max(height - 10, 1); // already passed
+
+// The two locktimes are fixed on the first run and saved, NOT recomputed from
+// the current tip each time. A lock's address is derived from its locktime, so
+// recomputing them would hand you two different addresses every time a block
+// arrived — and the coins you had just sent to the old pair would be stranded
+// while this sat there reporting "waiting".
+if (state.lockA === undefined || state.lockB === undefined) {
+  state.lockA = height + 50_000;          // years away at ten minutes a block
+  state.lockB = Math.max(height - 10, 1); // already passed
+  writeFileSync(STATE, JSON.stringify(state, null, 2));
+  line(`Fixed the two lock dates at block ${height} and saved them.`);
+}
+const LOCK_A = state.lockA;
+const LOCK_B = state.lockB;
+
+if (LOCK_B >= height) {
+  line(`\nLock B's date (block ${LOCK_B}) has not been reached yet — the chain is`);
+  line(`at ${height}. Wait for it to pass, then run this again.`);
+  process.exit(0);
+}
 
 const A = lockAddress({ fanPubkey, cosignerPubkey, locktime: LOCK_A, network: NETWORK });
 const B = lockAddress({ fanPubkey, cosignerPubkey, locktime: LOCK_B, network: NETWORK });
