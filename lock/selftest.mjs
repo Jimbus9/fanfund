@@ -13,6 +13,8 @@
 // Run:  node selftest.mjs
 
 import * as bitcoin from "bitcoinjs-lib";
+import miniscript from "@bitcoinerlab/miniscript";
+const { compileMiniscript, satisfier } = miniscript;
 import * as ecc from "tiny-secp256k1";
 import {
   ECPair, lockScript, lockAddress, buildSpend, describeLocktime, networkFor,
@@ -71,11 +73,23 @@ rule();
 const asm = bitcoin.script.toASM(witnessScript);
 
 check("Script contains CHECKLOCKTIMEVERIFY", asm.includes("OP_CHECKLOCKTIMEVERIFY"), true);
+check("Fan's signature is checked BEFORE either branch",
+  asm.startsWith(fanPubkey.toString("hex") + " OP_CHECKSIGVERIFY"), true,
+  "no route out of the lock skips the fan");
 check("Script has two branches (IF / ELSE / ENDIF)",
   asm.includes("OP_IF") && asm.includes("OP_ELSE") && asm.includes("OP_ENDIF"), true);
-check("Purchase branch requires BOTH keys (CHECKSIGVERIFY)",
-  asm.includes("OP_CHECKSIGVERIFY"), true,
-  "this is the line that stops the co-signer acting alone");
+check("Co-signer appears only in the purchase branch",
+  asm.split("OP_ELSE")[1].includes(cosignerPubkey.toString("hex")) &&
+  !asm.split("OP_ELSE")[0].includes(cosignerPubkey.toString("hex")), true,
+  "they cannot block or delay going home");
+
+// The lock must be standard miniscript, byte for byte, so Bitcoin Core and
+// ordinary wallets can read and sign it without any code of ours.
+const ms = compileMiniscript(
+  `and_v(v:pk(${fanPubkey.toString("hex")}),or_i(after(${LOCKTIME}),pk(${cosignerPubkey.toString("hex")})))`);
+check("Is standard miniscript, byte for byte",
+  ms.issane && bitcoin.script.fromASM(ms.asm.replace(/[<>]/g, "")).equals(witnessScript), true,
+  "and_v(v:pk(fan),or_i(after(t),pk(cosigner)))");
 check("Address is P2WSH (62 chars, tb1q on testnet)",
   address.length === 62 && address.startsWith("tb1q"), true, address.slice(0, 12) + "…");
 check("Address derives from this exact script",
@@ -93,6 +107,16 @@ const swapped = lockAddress({
 }).address;
 check("Swapping the two keys gives a different address", swapped !== address, true,
   "the roles are not interchangeable");
+
+// One key in both roles would let one person supply both purchase signatures
+// and move the coin before its date. Building such a lock must be refused.
+const refuses = (fn) => { try { fn(); return false; } catch { return true; } };
+const mirror = Buffer.from(fanPubkey); mirror[0] ^= 1; // 02 <-> 03, same x
+check("Refuses the same key as fan AND co-signer",
+  refuses(() => lockAddress({ fanPubkey, cosignerPubkey: fanPubkey, locktime: LOCKTIME, network: NETWORK })), true,
+  "otherwise one person could spend early");
+check("Refuses the key's mirror image as co-signer",
+  refuses(() => lockAddress({ fanPubkey, cosignerPubkey: mirror, locktime: LOCKTIME, network: NETWORK })), true);
 
 // --- The four attempts -----------------------------------------------------
 
@@ -117,31 +141,62 @@ rule();
 
 // 1. Fan alone, going home. Valid signature, and it declares the locktime.
 const home = buildSpend({ ...common, route: "home", signers: ["fan"] });
-check("Going home: fan's signature is valid", sigValid(home, 0, fanPubkey), true);
+check("Going home: fan's signature is valid", sigValid(home, 1, fanPubkey), true);
 check("Going home: declares nLockTime", home.tx.locktime === LOCKTIME, true, String(home.tx.locktime));
 check("Going home: no co-signer involved at all", witnessOf(home).length === 3, true,
-  "signature, branch selector, script");
+  "branch selector, signature, script");
 
 // 2. Fan + co-signer, purchase route.
 const purchase = buildSpend({ ...common, route: "purchase", signers: ["fan", "cosigner"] });
-check("Purchase: fan's signature is valid", sigValid(purchase, 1, fanPubkey), true);
+check("Purchase: fan's signature is valid", sigValid(purchase, 2, fanPubkey), true);
 check("Purchase: co-signer's signature is valid", sigValid(purchase, 0, cosignerPubkey), true);
 check("Purchase: needs no locktime", purchase.tx.locktime === 0, true);
 check("Purchase: both signatures present", emptySlots(purchase) === 1, true, "only the branch selector is empty");
 
 // 3. Co-signer alone down the purchase route — the one that must never work.
 const alone = buildSpend({ ...common, route: "purchase", signers: ["cosigner"] });
-check("Co-signer alone: the fan's slot is EMPTY", witnessOf(alone)[1].length === 0, true,
+check("Co-signer alone: the fan's slot is EMPTY", witnessOf(alone)[2].length === 0, true,
   "nothing for CHECKSIGVERIFY to accept");
-check("Co-signer alone: cannot be made valid locally", sigValid(alone, 1, fanPubkey), false);
+check("Co-signer alone: cannot be made valid locally", sigValid(alone, 2, fanPubkey), false);
 
 // 4. A stranger's signature in the fan's place.
 const forged = buildSpend({
   ...common, route: "purchase", signers: ["fan", "cosigner"], fanKey: strangerKey,
 });
 check("Stranger's signature does not verify as the fan's",
-  sigValid(forged, 1, fanPubkey), false,
+  sigValid(forged, 2, fanPubkey), false,
   "a valid signature from the wrong key is still the wrong key");
+
+// --- Cross-check against miniscript ---------------------------------------
+//
+// The checks above confirm each signature sits where we put it. This one asks
+// an independent library how the script MUST be spent, and compares. If our
+// witness layout were wrong, the network would reject every spend.
+
+line();
+rule();
+line("CROSS-CHECK: HOW MINISCRIPT SAYS TO SPEND IT");
+rule();
+
+const token = (pubkeyOf) => (item) =>
+  item.length === 0 ? "0"
+  : item.length === 1 && item[0] === 1 ? "1"
+  : `<sig(${pubkeyOf(item)})>`;
+const ourLayout = (spend) => {
+  const w = witnessOf(spend).slice(0, -1); // drop the script itself
+  const who = (sig) => sigValid({ ...spend, tx: { ins: [{ witness: [sig] }] } }, 0, fanPubkey)
+    ? fanPubkey.toString("hex") : cosignerPubkey.toString("hex");
+  return w.map(token(who)).join(" ");
+};
+const sats = satisfier(
+  `and_v(v:pk(${fanPubkey.toString("hex")}),or_i(after(${LOCKTIME}),pk(${cosignerPubkey.toString("hex")})))`,
+).nonMalleableSats;
+const homeSat = sats.find((x) => x.nLockTime);
+const purchaseSat = sats.find((x) => !x.nLockTime);
+check("Exactly two safe ways to spend", sats.length, 2, "no third route exists");
+check("Going home: our witness matches miniscript's", ourLayout(home), homeSat.asm);
+check("Going home: miniscript also requires the date", homeSat.nLockTime, LOCKTIME);
+check("Purchase: our witness matches miniscript's", ourLayout(purchase), purchaseSat.asm);
 
 // --- The thing this file cannot do -----------------------------------------
 

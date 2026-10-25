@@ -8,21 +8,28 @@
 //   INTO A PURCHASE the fan's signature plus the co-signer's, at any time,
 //                   and only to a destination on the published list.
 //
-// Both live in one witness script. The IF branch is going home, the ELSE
-// branch is the purchase. Which branch gets used is chosen by the spender,
-// who puts a 1 or a 0 at the end of the witness.
+// Both live in one witness script, which reads: the fan ALWAYS signs, and
+// then EITHER the date has passed OR the co-signer signs too.
 //
+//   <fan> OP_CHECKSIGVERIFY
 //   OP_IF
-//     <locktime> OP_CHECKLOCKTIMEVERIFY OP_DROP
-//     <fan> OP_CHECKSIG
+//     <locktime> OP_CHECKLOCKTIMEVERIFY
 //   OP_ELSE
-//     <fan> OP_CHECKSIGVERIFY
 //     <cosigner> OP_CHECKSIG
 //   OP_ENDIF
 //
-// Read the ELSE branch carefully: CHECKSIGVERIFY then CHECKSIG means BOTH
-// signatures are required. The co-signer can never move the coin alone. That
-// is the single most important line in this project.
+// The first line is the most important in this project: it runs before the
+// branch is chosen, so no route out of the lock exists without the fan's
+// signature. The co-signer can never move the coin alone.
+//
+// Which branch gets used is chosen by the spender, who puts a 1 (going home)
+// or an empty item (purchase) in the witness.
+//
+// This is standard miniscript — and_v(v:pk(fan),or_i(after(t),pk(cosigner)))
+// — so ordinary wallets and Bitcoin Core can read and sign it with no code of
+// ours. That is what lets the co-signer sign thousands of commitments with an
+// offline copy of Bitcoin Core instead of pressing a button for each. An
+// earlier form named the fan's key twice, which miniscript refuses.
 //
 // Why P2WSH and not taproot: the behaviour is what matters at this stage, and
 // P2WSH has the most mature tooling and the widest wallet support, so there is
@@ -50,22 +57,38 @@ export function networkFor(name) {
   throw new Error(`unknown network: ${name}`);
 }
 
+/**
+ * The owner and the co-signer must be two different keys.
+ *
+ * If they were the same, one person could supply both purchase signatures and
+ * move the coin at any time — the lock would silently stop being a lock, and
+ * the register would still count it as locked. Babylon's staking scripts refuse
+ * the same thing for the same reason.
+ *
+ * Compared on the x-coordinate alone, because a key and its mirror image share
+ * it, and whoever holds one private key can trivially derive the other's.
+ */
+export function assertDistinctKeys(ownerPubkey, cosignerPubkey) {
+  const x = (k) => Buffer.from(k).subarray(k.length === 33 ? 1 : 0);
+  if (x(ownerPubkey).equals(x(cosignerPubkey))) {
+    throw new Error("owner and co-signer must be different keys");
+  }
+}
+
 /** Build the witness script holding both exits. */
 export function lockScript({ fanPubkey, cosignerPubkey, locktime }) {
   if (fanPubkey.length !== 33) throw new Error("fan pubkey must be 33 bytes (compressed)");
   if (cosignerPubkey.length !== 33) throw new Error("co-signer pubkey must be 33 bytes (compressed)");
   if (!Number.isInteger(locktime) || locktime <= 0) throw new Error("locktime must be a positive integer");
+  assertDistinctKeys(fanPubkey, cosignerPubkey);
 
   return script.compile([
+    fanPubkey,
+    opcodes.OP_CHECKSIGVERIFY,
     opcodes.OP_IF,
       script.number.encode(locktime),
       opcodes.OP_CHECKLOCKTIMEVERIFY,
-      opcodes.OP_DROP,
-      fanPubkey,
-      opcodes.OP_CHECKSIG,
     opcodes.OP_ELSE,
-      fanPubkey,
-      opcodes.OP_CHECKSIGVERIFY,
       cosignerPubkey,
       opcodes.OP_CHECKSIG,
     opcodes.OP_ENDIF,
@@ -90,6 +113,10 @@ export function describeLocktime(locktime) {
  *
  * route: "home"     — IF branch, fan alone, only valid at or after the locktime
  *        "purchase" — ELSE branch, fan plus co-signer, valid any time
+ *
+ * Witness layout, bottom of the stack first:
+ *   home      [ 1, fan sig, script ]
+ *   purchase  [ co-signer sig, (empty), fan sig, script ]
  *
  * signers decides who actually signs, so we can build the attempts that are
  * SUPPOSED to fail as well as the ones that are supposed to work.
@@ -128,18 +155,18 @@ export function buildSpend({
       Transaction.SIGHASH_ALL,
     );
 
-  // The witness is read bottom-up by the script, so these go in the order the
-  // stack needs them: signatures first, then the branch selector, then the
-  // script itself.
+  // The script consumes the stack from the top: the fan's signature first,
+  // then the branch selector, then (purchase only) the co-signer's signature.
+  // So they go in reverse: the item used last goes in first.
+  const fanSig = signers.includes("fan") ? sigFor(fanKey) : Buffer.alloc(0);
   const witness = [];
   if (route === "home") {
-    witness.push(signers.includes("fan") ? sigFor(fanKey) : Buffer.alloc(0));
-    witness.push(Buffer.from([1])); // take the IF branch
+    witness.push(Buffer.from([1]));  // take the IF branch
   } else {
     witness.push(signers.includes("cosigner") ? sigFor(cosignerKey) : Buffer.alloc(0));
-    witness.push(signers.includes("fan") ? sigFor(fanKey) : Buffer.alloc(0));
-    witness.push(Buffer.alloc(0)); // take the ELSE branch
+    witness.push(Buffer.alloc(0));   // take the ELSE branch
   }
+  witness.push(fanSig);
   witness.push(witnessScript);
 
   tx.setWitness(0, witness);

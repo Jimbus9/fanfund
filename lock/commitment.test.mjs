@@ -243,6 +243,11 @@ rejects("Lock address does not match the stated keys",
   verifyWith({ ...record, lock: { ...record.lock, locktime: LOCKTIME + 1 } }),
   "does not re-derive");
 
+// a "lock" whose owner is also its co-signer is no lock at all
+rejects("A lock whose owner key is also the co-signer key",
+  verifyWith({ ...record, lock: { ...record.lock, cosigner_pubkey: record.lock.owner_pubkey } }),
+  "must be different keys");
+
 // an absurd fee
 const greedy = buildCommitment({
   utxo, witnessScript: lock.witnessScript, destination: DEST,
@@ -301,12 +306,12 @@ const done = completeCommitment({ record, cosignerKey, utxoValue: utxo.value, ne
 const dw = done.tx.ins[0].witness;
 
 check("The co-signer's slot is now filled", dw[0].length > 0, true, `${dw[0].length} bytes`);
-check("The owner's signature is untouched", dw[1].equals(built.tx.ins[0].witness[1]), true);
-check("Still the purchase branch", dw[2].length === 0 && dw[3].equals(lock.witnessScript), true);
+check("The owner's signature is untouched", dw[2].equals(built.tx.ins[0].witness[2]), true);
+check("Still the purchase branch", dw[1].length === 0 && dw[3].equals(lock.witnessScript), true);
 check("Both signatures verify over the same sighash",
   (() => {
     const ecc = bitcoin.script.signature;
-    const o = ecc.decode(dw[1]), c = ecc.decode(dw[0]);
+    const o = ecc.decode(dw[2]), c = ecc.decode(dw[0]);
     return ownerKey.verify(done.sighash, o.signature) && cosignerKey.verify(done.sighash, c.signature);
   })(), true);
 check("Completing it twice is refused",

@@ -3,6 +3,8 @@
 // Run:  node taproot.test.mjs
 
 import * as bitcoin from "bitcoinjs-lib";
+import miniscript from "@bitcoinerlab/miniscript";
+const { compileMiniscript } = miniscript;
 import {
   ECPair, lockTaproot, buildTaprootSpend, toXOnly, schnorrValid,
   UNSPENDABLE_INTERNAL_KEY, leafHash,
@@ -65,10 +67,32 @@ check("Co-signer absent from the going-home leaf",
   lock.leaves.home.includes(cosignerX), false,
   "they cannot block or delay a withdrawal");
 
+// Both leaves must be standard tapscript miniscript, byte for byte, so Bitcoin
+// Core and ordinary wallets can read and sign them without any code of ours.
+const asTapMiniscript = (m, leaf) => {
+  const r = compileMiniscript(m, { tapscript: true });
+  return r.issane && bitcoin.script.fromASM(r.asm.replace(/[<>]/g, "")).equals(leaf);
+};
+check("Going-home leaf is standard miniscript",
+  asTapMiniscript(`and_v(v:pk(${ownerX.toString("hex")}),after(${LOCKTIME}))`, lock.leaves.home), true,
+  "and_v(v:pk(owner),after(t))");
+check("Purchase leaf is standard miniscript",
+  asTapMiniscript(`and_v(v:pk(${ownerX.toString("hex")}),pk(${cosignerX.toString("hex")}))`, lock.leaves.purchase), true,
+  "and_v(v:pk(owner),pk(cosigner))");
+
 const other = lockTaproot({ ownerPubkey, cosignerPubkey, locktime: LOCKTIME + 1, network: NETWORK });
 check("A different locktime gives a different address", other.address !== lock.address, true);
 const swapped = lockTaproot({ ownerPubkey: cosignerPubkey, cosignerPubkey: ownerPubkey, locktime: LOCKTIME, network: NETWORK });
 check("Swapping the keys gives a different address", swapped.address !== lock.address, true);
+
+const refuses = (fn) => { try { fn(); return false; } catch { return true; } };
+const mirror = Buffer.from(ownerPubkey); mirror[0] ^= 1; // 02 <-> 03, same x-only key
+check("Refuses the same key as owner AND co-signer",
+  refuses(() => lockTaproot({ ownerPubkey, cosignerPubkey: ownerPubkey, locktime: LOCKTIME, network: NETWORK })), true,
+  "otherwise one person could spend early");
+check("Refuses the key's mirror image as co-signer",
+  refuses(() => lockTaproot({ ownerPubkey, cosignerPubkey: mirror, locktime: LOCKTIME, network: NETWORK })), true,
+  "taproot sees them as one key");
 
 // --- Spending --------------------------------------------------------------
 

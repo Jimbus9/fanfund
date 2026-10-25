@@ -18,6 +18,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairFactory } from "ecpair";
 import * as ecc from "tiny-secp256k1";
+import { assertDistinctKeys } from "./lock.mjs";
 
 bitcoin.initEccLib(ecc);
 export const ECPair = ECPairFactory(ecc);
@@ -36,18 +37,21 @@ export const UNSPENDABLE_INTERNAL_KEY = Buffer.from(
 
 export const LEAF_VERSION = 192; // 0xc0, the only tapscript version in use
 
-/** The going-home leaf: owner's signature alone, at or after the locktime. */
+/**
+ * The going-home leaf: owner's signature alone, at or after the locktime.
+ * Miniscript and_v(v:pk(owner),after(t)) — written in that standard form so
+ * ordinary wallets and Bitcoin Core can read and sign it.
+ */
 export function homeLeaf({ ownerXOnly, locktime }) {
   return script.compile([
+    ownerXOnly,
+    opcodes.OP_CHECKSIGVERIFY,
     script.number.encode(locktime),
     opcodes.OP_CHECKLOCKTIMEVERIFY,
-    opcodes.OP_DROP,
-    ownerXOnly,
-    opcodes.OP_CHECKSIG,
   ]);
 }
 
-/** The purchase leaf: owner AND co-signer, any time. */
+/** The purchase leaf: owner AND co-signer, any time. Miniscript and_v(v:pk(owner),pk(cosigner)). */
 export function purchaseLeaf({ ownerXOnly, cosignerXOnly }) {
   return script.compile([
     ownerXOnly,
@@ -58,6 +62,7 @@ export function purchaseLeaf({ ownerXOnly, cosignerXOnly }) {
 }
 
 export function lockTaproot({ ownerPubkey, cosignerPubkey, locktime, network }) {
+  assertDistinctKeys(ownerPubkey, cosignerPubkey); // see lock.mjs
   const ownerXOnly = toXOnly(ownerPubkey);
   const cosignerXOnly = toXOnly(cosignerPubkey);
 
