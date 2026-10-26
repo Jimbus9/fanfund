@@ -163,6 +163,64 @@ line(`coins spent in this test end up at ${payout}`);
 
 const [au, bu] = [await utxos(A.address), await utxos(B.address)];
 
+// --- Recycling, so a faucet is needed once rather than twice ---------------
+//
+// A successful purchase attempt spends lock A into `payout`, an ordinary
+// address this script holds the key for. Those coins are then sitting right
+// there, which means the second lock does not need a faucet at all: fund lock
+// A once, and the proceeds of its own test pay for lock B's.
+//
+// Worth it because testnet faucets allow about one claim a day, several want
+// an account, and the no-signup ones come and go.
+
+const FUND_B = 10_000; // sats to move into lock B
+
+async function fundLockBFromPayout() {
+  const pu = await utxos(payout);
+  if (pu.length === 0) return false;
+
+  const coin = pu[0];
+  const change = coin.value - FUND_B - FEE;
+  if (change < MIN_UTXO) {
+    line(`\n${payout} holds ${coin.value} sats — not enough to fund lock B and leave`);
+    line(`a usable remainder. Use a faucet for lock B instead.`);
+    return false;
+  }
+
+  const p2wpkh = bitcoin.payments.p2wpkh({ pubkey: fanPubkey, network: NETWORK });
+  const tx = new bitcoin.Transaction();
+  tx.version = 2;
+  tx.addInput(Buffer.from(coin.txid, "hex").reverse(), coin.vout, 0xfffffffe);
+  tx.addOutput(B.output, FUND_B);
+  tx.addOutput(p2wpkh.output, change);
+
+  // A P2WPKH input is signed against the equivalent P2PKH script, not the
+  // witness program itself. This catches people out; it is what BIP-143 says.
+  const scriptCode = bitcoin.payments.p2pkh({ pubkey: fanPubkey, network: NETWORK }).output;
+  const sighash = tx.hashForWitnessV0(0, scriptCode, coin.value, bitcoin.Transaction.SIGHASH_ALL);
+  const sig = bitcoin.script.signature.encode(Buffer.from(fanKey.sign(sighash)), bitcoin.Transaction.SIGHASH_ALL);
+  tx.setWitness(0, [sig, fanPubkey]);
+
+  const r = await broadcast(tx.toHex());
+  if (!r.ok) {
+    line(`\nTried to fund lock B from ${payout} and the node refused:`);
+    line(`  ${r.text.slice(0, 180)}`);
+    return false;
+  }
+
+  line();
+  line(`Funded lock B with ${FUND_B} sats out of an earlier test's proceeds.`);
+  line(`  txid ${tx.getId()}`);
+  return true;
+}
+
+if (bu.length === 0) {
+  if (await fundLockBFromPayout()) {
+    const again = await utxos(B.address);
+    if (again.length) bu.push(...again);
+  }
+}
+
 // Testnet faucets are rate limited to roughly one claim a day each, and the
 // no-signup ones come and go, so funding both locks in one sitting is often
 // not possible. Run whatever the funding allows and say plainly what was left
