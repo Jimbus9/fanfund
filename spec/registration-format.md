@@ -73,10 +73,18 @@ still counts as membership, but cannot be tied to a lock. Use `bc1q`.
 
 | Type | Prefix | Accepted |
 | --- | --- | --- |
-| Native segwit v0 (P2WPKH) | `bc1q` | **Yes — use this** |
-| Legacy (P2PKH) | `1` | Yes |
-| Nested segwit (P2SH-P2WPKH) | `3` | Yes |
+| Native segwit v0 (P2WPKH) | `bc1q` | **Yes — the only kind accepted today** |
+| Legacy (P2PKH) | `1` | Not yet |
+| Nested segwit (P2SH-P2WPKH) | `3` | Not yet |
 | Taproot (P2TR) | `bc1p` | Not yet — see below |
+
+An earlier version of this document said legacy and nested segwit were accepted.
+They were not: the verifier only ever derives a native segwit address from the
+recovered key, so a signature from a legacy wallet was refused while the
+specification promised it would work. Both are straightforward to add — derive
+the other address types from the same recovered key and compare against each —
+and adding them breaks no existing registration. Until they are added, this
+table says what the code does.
 
 Taproot message signing requires BIP-322, and wallet support for it is still
 patchy. The register will accept taproot signatures once that changes; adding

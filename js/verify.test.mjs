@@ -106,6 +106,18 @@ check("An uncompressed key is refused",
   (() => { try { memberAddressForOwnerKey("04" + "11".repeat(64)); return false; } catch { return true; } })(),
   true, "a lock script needs 33 bytes");
 
+// --- bech32 is case-insensitive -------------------------------------------
+// BC1Q… and bc1q… are the same address. Rejecting the uppercase form told a
+// member their signature belonged to a different address, which is wrong and
+// is the worst thing to say to somebody hunting a mistake.
+
+check("UPPERCASE bech32 of the same address is accepted",
+  verifyMembership({ address: address.toUpperCase(), signature, message: STATEMENT }).valid, true,
+  "some wallets and QR readers return it that way");
+check("Mixed-case bech32 is still rejected",
+  verifyMembership({ address: address.slice(0, 8).toUpperCase() + address.slice(8), signature, message: STATEMENT }).valid,
+  false, "genuinely invalid under BIP-173");
+
 console.log("\n" + "-".repeat(72));
 console.log(failures === 0
   ? "All checks passed. The browser verifier agrees with an independent library."

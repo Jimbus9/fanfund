@@ -164,7 +164,16 @@ export function verifyMembership({ address, signature, message, hrp = "bc" }) {
   }
 
   const derived = encodeP2WPKH(hash160(pubkey), hrp);
-  const claimed = String(address).trim();
+
+  // Bech32 is case-insensitive: BC1Q... and bc1q... are the same address, and
+  // some wallets and QR readers hand back the uppercase form. Comparing raw
+  // would reject a correct signature with the words "belongs to a different
+  // address", which is both wrong and the worst possible thing to tell someone
+  // hunting a mistake. Mixed case is genuinely invalid and stays rejected.
+  const raw = String(address).trim();
+  const claimed = (raw === raw.toUpperCase() && raw !== raw.toLowerCase())
+    ? raw.toLowerCase()
+    : raw;
 
   if (derived !== claimed) {
     return {
