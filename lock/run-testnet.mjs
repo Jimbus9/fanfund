@@ -280,14 +280,14 @@ if (skipped.length) {
 if (failed === 0 && results.length) {
   line(`All ${results.length} attempt(s) that could be made behaved as specified.`);
 }
-if (failed === 0 && !skipped.length) {
+if (failed > 0) {
+  line(`${failed} of ${results.length} attempts did not behave as specified.`);
+  line("Do not build anything else on this lock until that is understood.");
+} else if (!skipped.length) {
   line("The lock behaves exactly as the declaration describes it.");
   line("Committed money cannot be withdrawn early. It cannot be taken by anyone.");
   line("It can reach a purchase with the owner's consent, and it comes home on");
   line("its date whether anyone cooperates or not.");
-} else {
-  line(`${failed} of ${results.length} attempts did not behave as specified.`);
-  line("Do not build anything else on this lock until that is understood.");
 }
 rule("=");
 line();
