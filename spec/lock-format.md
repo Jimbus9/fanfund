@@ -184,7 +184,8 @@ committed at scale, and the two forms may coexist — the counting rule treats
 them identically.
 
 `lock/taproot.test.mjs` proves the taproot construction and its signatures
-offline. Its enforcement has not yet been proven on a live network, which is the
+offline. Its enforcement has not yet been proven on a live network — unlike the
+P2WSH form, which now has been — which is the
 only reason this document still specifies P2WSH first.
 
 ## Reference implementation
@@ -192,14 +193,16 @@ only reason this document still specifies P2WSH first.
 `lock/` in the repository. `selftest.mjs` proves the construction offline;
 `run-testnet.mjs` proves the network's enforcement, which no local test can.
 
-The four behaviours that must hold:
+The four behaviours that must hold — **all four confirmed on testnet4, 25 and
+26 October 2026**:
 
-| Attempt | Required result |
-| --- | --- |
-| Owner alone, before the locktime | Rejected by the network |
-| Co-signer alone, ever | Rejected by the network |
-| Owner and co-signer, any time | Accepted |
-| Owner alone, at or after the locktime | Accepted |
+| Attempt | Required | What the node said |
+| --- | --- | --- |
+| Owner alone, before the locktime | Rejected | `non-final` |
+| Co-signer alone, ever | Rejected | `Script failed an OP_CHECKSIGVERIFY operation` |
+| Owner and co-signer, any time | Accepted | txid `fddc6525…a89ae50` |
+| Owner alone, at or after the locktime | Accepted | txid `765bbc23…6385cdb8` |
 
 If any of these does not hold, nothing else in this project should be relied
-upon.
+upon. They were checked rather than assumed, by a Bitcoin node with no interest
+in the answer.
