@@ -5,6 +5,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { ECPair, lockAddress, networkFor } from "./lock.mjs";
 import {
   buildCommitment, verifyCommitment, completeCommitment,
@@ -328,6 +329,41 @@ check("The co-signer cannot change where the money goes",
     const r = verifyWith({ ...record, tx: t.toHex() });
     return !r.valid;
   })(), true, "redirecting it invalidates the owner's signature");
+
+// ---------------------------------------------------------------------------
+// One Crowdlock, never another
+// ---------------------------------------------------------------------------
+
+line();
+rule();
+line("ONE CROWDLOCK, NEVER ANOTHER");
+rule();
+
+// The Kop Fund's own file, given this test's co-signer. A second Crowdlock with
+// a different co-signer. The commitment above belongs to the first only.
+const kop = JSON.parse(readFileSync(new URL("../crowdlocks/kop-fund.json", import.meta.url), "utf8"));
+const ours = { ...kop, cosigner_keys: [cosignerPubkey.toString("hex")] };
+const theirs = { ...kop, name: "Another Crowdlock", cosigner_keys: [Buffer.from(strangerKey.publicKey).toString("hex")] };
+
+const mine = verifyWith(record, { crowdlock: ours });
+check("Verifies under the Crowdlock that co-signs it", mine.valid, true, mine.reason || ours.name);
+rejects("Refused by a Crowdlock with a different co-signer",
+  verifyWith(record, { crowdlock: theirs }), "belongs to a different Crowdlock");
+const leaksAcross = buildCommitment({
+  utxo, witnessScript: lock.witnessScript, destination: DEST,
+  commitSats: COMMIT, feeSats: FEE, ownerKey,
+  remainder: { fanPubkey: ownerPubkey, cosignerPubkey: Buffer.from(strangerKey.publicKey), locktime: LOCKTIME },
+  network: NETWORK,
+});
+rejects("Refused when the remainder moves to another Crowdlock",
+  verifyWith(
+    { ...record, remainder: { ...record.remainder, cosigner_pubkey: theirs.cosigner_keys[0] }, tx: leaksAcross.hex },
+    { crowdlock: ours },
+  ), "co-signed by a different Crowdlock");
+rejects("The Crowdlock's own fee cap is used, not the default",
+  verifyWith(record, { crowdlock: { ...ours, max_commitment_fee: 0.0005 } }), "refusing in case of a client bug");
+rejects("The Crowdlock's own destination wait is used, not the default",
+  verifyWith(record, { crowdlock: { ...ours, destination_wait_days: 10_000 } }), "needs 10000");
 
 line();
 rule();

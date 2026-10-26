@@ -19,8 +19,12 @@ import * as bitcoin from "bitcoinjs-lib";
 import * as ecc from "tiny-secp256k1";
 import { createHash } from "node:crypto";
 import { lockScript, lockAddress } from "./lock.mjs";
+import { isCosignerOf } from "../js/crowdlock.mjs";
 
 const { Transaction, script: bscript } = bitcoin;
+
+// Defaults only. A Crowdlock sets its own in crowdlocks/<name>.json, and
+// verifyCommitment uses those whenever it is handed the Crowdlock's file.
 
 /** Fee may not exceed this share of the committed amount. */
 export const MAX_FEE_FRACTION = 0.01;
@@ -162,6 +166,10 @@ export function buildCommitment({
  * caller supplies from any block explorer (omit it and that check is skipped
  * and reported as skipped).
  *
+ * Pass `crowdlock` (the Crowdlock's own file) and its fee cap and destination
+ * wait are used, and a commitment whose lock is not co-signed by that
+ * Crowdlock is refused — a commitment can never be counted by the wrong one.
+ *
  * Returns { valid, reason, committedSats, checks }.
  */
 export function verifyCommitment({
@@ -171,7 +179,10 @@ export function verifyCommitment({
   utxoValue,              // the lock's value, needed to check the signature and the fee
   coinIsUnspent = null,
   network,
+  crowdlock = null,
 }) {
+  const maxFee = crowdlock ? crowdlock.max_commitment_fee : MAX_FEE_FRACTION;
+  const minimumAgeDays = crowdlock ? crowdlock.destination_wait_days : MINIMUM_AGE_DAYS;
   const checks = [];
   const fail = (reason) => ({ valid: false, reason, committedSats: 0, checks });
   const note = (name, ok, detail = "") => { checks.push({ name, ok, detail }); return ok; };
@@ -193,6 +204,13 @@ export function verifyCommitment({
   }
   if (derived.address !== record.lock.address) return fail("lock address does not re-derive from the stated keys and locktime");
   note("lock address re-derives", true, derived.address);
+
+  if (crowdlock) {
+    if (!isCosignerOf(crowdlock, record.lock.cosigner_pubkey)) {
+      return fail(`the lock's co-signer is not ${crowdlock.name}'s — this commitment belongs to a different Crowdlock, or to none`);
+    }
+    note("lock belongs to this Crowdlock", true, crowdlock.name);
+  }
 
   // 2. exactly one input
   let tx;
@@ -232,7 +250,7 @@ export function verifyCommitment({
   if (out0 !== proposal.destination) return fail(`output 0 pays ${out0}, but the proposal names ${proposal.destination}`);
   note("output 0 pays the proposal's destination", true, out0);
 
-  const permitted = destinationIsPermitted({ address: out0, entries: destinationEntries, opensAt: proposal.opensAt });
+  const permitted = destinationIsPermitted({ address: out0, entries: destinationEntries, opensAt: proposal.opensAt, minimumAgeDays });
   if (!permitted.permitted) return fail(`destination not permitted: ${permitted.reason}`);
   note("destination is on the published list", true);
 
@@ -253,6 +271,7 @@ export function verifyCommitment({
     if (!tx.outs[1].script.equals(back.output)) return fail("output 1 does not pay the declared remainder lock");
     if (r.owner_pubkey !== record.lock.owner_pubkey) return fail("remainder lock has a different owner — this would move coins out of the owner's hands");
     if (r.locktime < record.lock.locktime) return fail("remainder lock expires earlier than the lock being spent — an early escape");
+    if (crowdlock && !isCosignerOf(crowdlock, r.cosigner_pubkey)) return fail("remainder lock is co-signed by a different Crowdlock");
     note("remainder returns to the owner's own lock, no earlier", true);
   }
 
@@ -260,8 +279,8 @@ export function verifyCommitment({
   const paidOut = tx.outs.reduce((n, o) => n + o.value, 0);
   const fee = utxoValue - paidOut;
   if (fee < 0) return fail("outputs exceed the input");
-  if (fee > committedSats * MAX_FEE_FRACTION) {
-    return fail(`fee of ${fee} sats is more than ${MAX_FEE_FRACTION * 100}% of the ${committedSats} committed — refusing in case of a client bug`);
+  if (fee > committedSats * maxFee) {
+    return fail(`fee of ${fee} sats is more than ${maxFee * 100}% of the ${committedSats} committed — refusing in case of a client bug`);
   }
   note("fee is sane", true, `${fee} sats`);
 

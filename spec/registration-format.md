@@ -25,6 +25,13 @@ they own.
 I agree to the Supporters' Declaration v1 (sha256:3a0a0bca96ec2161d98ff9da05ae885d6b8d68e55ed412bc85dcc7fb16209b96) and join as a member.
 ```
 
+Every Crowdlock signs a line of exactly this shape, with its own declaration's
+title, version and fingerprint taken from its file in `crowdlocks/`:
+
+```
+I agree to the <title> v<version> (sha256:<fingerprint>) and join as a member.
+```
+
 One line, no wrapping, no trailing whitespace. The fingerprint is the SHA-256
 of the canonical declaration text — see `declaration-v1.txt` and the
 canonicalisation rules below. Signing a statement that carries the fingerprint

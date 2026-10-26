@@ -12,7 +12,7 @@
 </head>
 <body>
 
-<div class="bleed disclaimer"><div class="inner">An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
+<div class="bleed disclaimer"><div class="inner" id="disclaimer">An independent supporters' initiative. Not affiliated with, endorsed by, or connected to Liverpool Football Club.</div></div>
 <nav class="bleed"><div class="inner">
   <a href="../">The declaration</a>
   <a href="../why/">Why</a>
@@ -28,6 +28,7 @@
     <span class="eyebrow">Checked by your browser, not by us</span>
     <h1>The register</h1>
     <p class="lede">Every member and every pound committed. Your own browser checks each signature as this page loads — nothing here is taken on our word.</p>
+    <p class="note" id="whichCrowdlock" hidden></p>
   </header>
 
   <section>
@@ -89,7 +90,7 @@
       <div class="card step">
         <span class="n">2</span>
         <div class="b">
-          <h3>Add your two lines to <code>registrations.json</code></h3>
+          <h3>Add your two lines to <code id="regFile">registrations.json</code></h3>
           <p>Open a pull request on the repository with your address and signature added to the members list. That is the whole submission — there is no form and no account.</p>
         </div>
       </div>
@@ -110,6 +111,7 @@
     <pre>git clone https://github.com/Jimbus9/fanfund
 cd fanfund
 node js/verify.test.mjs     # check the verifier against another library
+node js/crowdlock.test.mjs  # check the Crowdlock files, needs no installs
 python3 -m http.server      # then open localhost:8000/register/</pre>
   </section>
 
@@ -117,14 +119,14 @@ python3 -m http.server      # then open localhost:8000/register/</pre>
 
 <footer class="inner">
   <p><strong>This is not an investment.</strong> There is no return, no dividend and no payout, now or ever. Nothing here is legal or financial advice.</p>
-  <p>An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
+  <p id="footDisclaimer">An independent initiative by supporters of Liverpool Football Club. Not affiliated with, endorsed by or connected to Liverpool Football Club, its owners, or any official supporters' organisation.</p>
   <p><a href="https://github.com/Jimbus9/fanfund">Source and documents on GitHub</a></p>
 </footer>
 
 <script type="module">
 import { verifyMembership } from "../js/verify.mjs";
+import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../js/crowdlock.mjs";
 
-const CHAIN_API = "https://mempool.space/api";
 const el = (id) => document.getElementById(id);
 const fmtBtc = (sats) => (sats / 1e8).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") || "0";
 
@@ -134,21 +136,82 @@ function setVerdict(node, textNode, ok, text) {
   node.hidden = false;
 }
 
-// ---- Load and verify the register ----------------------------------------
+// ---- Which Crowdlock ----------------------------------------------------
+// Nothing about any one Crowdlock is written into this page. It reads the
+// Crowdlock named in the address (?c=name), or the first one listed, and
+// everything below comes from that Crowdlock's own file.
 
-let data;
-try {
-  const res = await fetch("../registrations.json", { cache: "no-store" });
-  data = await res.json();
-} catch (e) {
-  el("asOf").textContent = "Could not load registrations.json.";
-  el("memberArea").innerHTML = '<p class="note">The register file could not be read, so nothing is being claimed on this page.</p>';
-  setVerdict(el("verdict"), el("verdictText"), false, "Register could not be loaded");
-  throw e;
+function refuse(why, detail) {
+  el("asOf").textContent = why;
+  el("memberArea").innerHTML = '<p class="note">Nothing is being claimed on this page until that is fixed.</p>';
+  setVerdict(el("verdict"), el("verdictText"), false, why);
+  el("verdictDetail").textContent = detail;
+  throw new Error(why);
 }
 
-const statement = data.declaration.statement;
-el("declHash").textContent = "sha256:" + data.declaration.sha256;
+const getJson = async (path) => {
+  const res = await fetch(path, { cache: "no-store" });
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return res.json();
+};
+
+let index, crowdlock, data;
+try {
+  index = await getJson("../crowdlocks/index.json");
+} catch (e) {
+  refuse("Could not load the list of Crowdlocks", String(e.message));
+}
+const asked = new URLSearchParams(location.search).get("c");
+// Only names on the published list are ever loaded.
+const slug = index.crowdlocks.includes(asked) ? asked : index.crowdlocks[0];
+
+try {
+  crowdlock = await getJson(`../crowdlocks/${slug}.json`);
+} catch (e) {
+  refuse("Could not load this Crowdlock's file", String(e.message));
+}
+
+let declarationText;
+try {
+  const res = await fetch(`../${crowdlock.declaration.file}`, { cache: "no-store" });
+  declarationText = await res.text();
+} catch { declarationText = undefined; }
+
+const fileCheck = checkCrowdlock(crowdlock, { declarationText });
+if (!fileCheck.ok) refuse(`${crowdlock.name ?? slug}'s file does not check out`, fileCheck.problems.join(" "));
+
+try {
+  data = await getJson(`../${crowdlock.register.registrations}`);
+} catch (e) {
+  refuse("Could not load the register file", String(e.message));
+}
+
+const agree = checkRegisterFiles(crowdlock, { registrations: data });
+if (!agree.ok) refuse("The register does not match this Crowdlock", agree.problems.join(" "));
+
+// The statement is rebuilt from the Crowdlock's own file, never read from the
+// register — so a register cannot swap in different words to sign.
+const statement = membershipStatement(crowdlock);
+const CHAIN_API = crowdlock.chain_api;
+
+el("declHash").textContent = "sha256:" + crowdlock.declaration.sha256;
+el("regFile").textContent = crowdlock.register.registrations;
+if (crowdlock.disclaimer) {
+  el("disclaimer").textContent = crowdlock.disclaimer;
+  el("footDisclaimer").textContent = crowdlock.disclaimer;
+}
+if (index.crowdlocks.length > 1) {
+  const which = el("whichCrowdlock");
+  which.hidden = false;
+  which.textContent = `Showing the register of ${crowdlock.name}. Others published here: `;
+  index.crowdlocks.filter((s) => s !== slug).forEach((s, i) => {
+    if (i) which.append(", ");
+    const a = document.createElement("a");
+    a.href = `?c=${encodeURIComponent(s)}`;
+    a.textContent = s;
+    which.append(a);
+  });
+}
 
 const members = data.members || [];
 const locks = data.locks || [];

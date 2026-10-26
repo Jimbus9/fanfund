@@ -153,7 +153,7 @@ cannot move a coin, because the purchase exit needs the co-signer too, so it can
 be published and copied freely by anybody. Three operations: the supporter
 builds one, anybody verifies one, and at settlement the co-signer completes it.
 
-`commitment.test.mjs` runs 34 checks offline. Most of them assert a
+`commitment.test.mjs` runs 40 checks offline. Most of them assert a
 **rejection**, because that is where the value is: a tampered destination, a
 forged owner signature, a destination nobody attested, one that has not waited
 out its fourteen days, a revoked one, a declared locktime, a fee large enough to
@@ -163,6 +163,12 @@ smuggle coins out of a lock early.
 It also proves the thing that matters most about settlement: **the co-signer
 cannot change where the money goes.** Altering any output invalidates the
 owner's signature, and the co-signer cannot replace it.
+
+Hand `verifyCommitment` a Crowdlock's own file (`crowdlocks/<name>.json`) and it
+uses that Crowdlock's fee cap and destination wait instead of the defaults, and
+refuses any commitment whose lock, or whose remainder, is co-signed by somebody
+else's Crowdlock. A commitment can only ever be counted by the Crowdlock it was
+made for.
 
 See `spec/commitment-format.md` and `spec/destinations-format.md`.
 

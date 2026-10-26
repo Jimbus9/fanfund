@@ -75,28 +75,57 @@ Said plainly, so that nobody adopts it for the wrong job:
 ## What your instance must publish
 
 The six general documents are written against parameters rather than fixed
-numbers. Publish your values for all of these, in one place, and your instance is
-fully specified.
+numbers. Publish your values for all of these **in one file**,
+`crowdlocks/<your-name>.json`, and your instance is fully specified. The Kop
+Fund's is `crowdlocks/kop-fund.json`: copy it and change the values.
 
 | Parameter | What it is | This instance |
 | --- | --- | --- |
-| `declaration` | Canonical text and its SHA-256. **This is your instance's identity** | `declaration-v1.txt`, `3a0a0bca…6209b96` |
-| `network` | Which chain | Bitcoin mainnet |
-| `unit` | Unit of account for every published figure | Bitcoin |
-| `lock_lengths` | The fixed options a member may choose | 1, 3 or 5 years |
-| `minimum_counted_lock` | Below this, a lock does not count towards the total | 200,000 sats |
-| `cosigner_keys` | Public keys for the lock's purchase exit | **Not yet chosen** |
-| `gathering_window_max` | Longest a proposal may gather | 4 weeks |
-| `settlement_window_max` | Longest settlement may take after that | 2 weeks |
-| `destination_wait` | How long a destination must be public before a proposal may name it | 14 days |
-| `attestor_keys` | Who attests destinations. **Never the co-signer's key** | **Not yet chosen** |
+| `name` | What your Crowdlock is called | The Kop Fund |
+| `declaration` | Its title, version, file and SHA-256. **The SHA-256 is your instance's identity** | Supporters' Declaration v1, `declaration-v1.txt`, `3a0a0bca…6209b96` |
+| `network` | Which chain | `mainnet` |
+| `unit` | Unit of account for every published figure | `BTC` |
+| `lock_lengths_years` | The fixed options a member may choose | 1, 3 or 5 |
+| `minimum_counted_lock_sats` | Below this, a lock does not count towards the total | 200,000 |
+| `cosigner_keys` | Public keys for the lock's purchase exit | **Not yet chosen** — an empty list |
+| `gathering_window_max_days` | Longest a proposal may gather | 28 |
+| `settlement_window_max_days` | Longest settlement may take after that | 14 |
+| `destination_wait_days` | How long a destination must be public before a proposal may name it | 14 |
+| `attestor_keys` | Who attests destinations. **Never a co-signer's key** | **Not yet chosen** — an empty list |
 | `attestor_threshold` | How many attestations an entry needs | 1 |
-| `max_commitment_fee` | Fee cap on a commitment, as a share of the amount committed | 1% |
-| `register` | Where registrations and commitments are published | This repository |
+| `max_commitment_fee` | Fee cap on a commitment, as a fraction of the amount committed | 0.01 |
+| `register` | Your registrations and destinations files | `registrations.json`, `destinations.json` |
+| `chain_api` | Where the register reads balances from. Anybody can swap in their own | mempool.space |
+| `disclaimer` | Optional. Shown on your register page | Not affiliated with Liverpool FC |
 
 Choose them deliberately. Shorter windows suit a smaller, more connected crowd; a
 higher minimum suits fewer, larger contributors; a longer destination wait suits
 a larger purchase.
+
+Nothing about any one Crowdlock is written into the code. The register page and
+the lock tools read whichever file they are pointed at, so the same software
+serves every instance. `node js/crowdlock.test.mjs` checks every file listed in
+`crowdlocks/index.json`: that it is complete, that its declaration really hashes
+to the fingerprint it claims, and that its register files agree with it.
+
+## Several Crowdlocks side by side
+
+One site, or one app, can carry as many Crowdlocks as people add. Add your file
+to `crowdlocks/`, add its name to `crowdlocks/index.json`, and your register is
+at `register/?c=<your-name>`. Three rules keep them apart:
+
+- **Every Crowdlock has its own declaration.** Two sharing one would be the same
+  Crowdlock, and the checks refuse it.
+- **No two Crowdlocks share a co-signer key.** A lock is counted by the
+  Crowdlock whose co-signer it names, so a shared key would let one coin be
+  counted twice. The checks refuse it, and a commitment checked against the
+  wrong Crowdlock's file is refused too, so money committed to one can never be
+  counted by another.
+- **One key across several Crowdlocks links your memberships publicly.** Your
+  member address is derived from your key, so anyone can see that the same
+  person backs both. That is a matter of privacy, not of safety, and nothing
+  stops you doing it. If you would rather the two were not connected, use a
+  separate wallet for each.
 
 ## Your instance is identified by its declaration's hash
 

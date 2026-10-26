@@ -94,6 +94,9 @@ cd fanfund
 # the verifier, checked against an independent library
 node js/verify.test.mjs
 
+# every Crowdlock's own file, and its declaration's fingerprint
+node js/crowdlock.test.mjs
+
 # the lock's construction
 cd lock &amp;&amp; npm install &amp;&amp; node selftest.mjs
 
