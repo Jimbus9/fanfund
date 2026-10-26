@@ -15,7 +15,7 @@ ordinary wallet and no app at all. An instance is *a* Crowdlock, the way a
 particular society is a co-operative. **The Kop Fund is a Crowdlock.** Yours
 will be another, with its own name and its own declaration.
 
-## The method is six documents and one declaration
+## Crowdlock is six documents, plus your own declaration
 
 | | Document | General? |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ to pay.
 
 Write your own declaration. Keep the six.
 
-## What the method is for
+## What Crowdlock is for
 
 **A crowd buying an asset it intends to hold permanently and never take income
 from, without a custodian.**
@@ -58,7 +58,7 @@ The whole design leans on that condition. It is why nobody needs to be trusted
 with a pot of money, why there is no custodian, and why the thing cannot quietly
 become somebody's business.
 
-## What the method is bad at
+## What Crowdlock is bad at
 
 Said plainly, so that nobody adopts it for the wrong job:
 
@@ -69,8 +69,33 @@ Said plainly, so that nobody adopts it for the wrong job:
 - **Vague goals.** It needs an identifiable seller, a price, and an address that
   can be published and attested in advance. "Fund our campaign" does not fit.
 - **Anybody who might need their money back on demand.** A lock is a lock.
-- **Anything needing a continuous income.** Running costs must come from
-  somewhere else entirely; committed money is for the purchase and nothing else.
+- **A trickle rather than a target.** Crowdlock funds something with a price: a
+  stake, a building, a year's costs written as a figure and a date. It has no
+  notion of a standing order, so it cannot be a subscription. A charity's whole
+  year *can* be a target. "A bit each month, forever" cannot.
+
+## What the money may be spent on is your declaration's business
+
+The Kop Fund's declaration says committed money buys and holds a stake, so its
+running costs have to come from somewhere else. **That is a rule The Kop Fund
+wrote for itself, not a limit of the method.**
+
+A Crowdlock whose declaration says it funds an air ambulance every year, or a
+stadium expansion once a stake is owned, is doing exactly what it told its
+members it would do. Repeat purchases are a normal shape. So is running several
+Crowdlocks side by side, each with its own declaration and its own register,
+which is what the instance files are for.
+
+What does not bend is the condition above: **contributors receive nothing
+financial, ever.** A donation is not a return, and neither is watching the thing
+you paid for get built.
+
+One warning for anyone funding something they only partly own. If supporters
+hold two per cent of a club and then pay for a stand, ninety-eight per cent of
+what they paid for belongs to the people they were trying to counterbalance. The
+stand may well be worth building anyway — but that is a transfer, it should be
+named as one, and a declaration that permits this should say so where its members
+will read it.
 
 ## What your instance must publish
 
