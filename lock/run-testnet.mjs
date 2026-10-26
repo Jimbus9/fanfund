@@ -163,17 +163,23 @@ line(`coins spent in this test end up at ${payout}`);
 
 const [au, bu] = [await utxos(A.address), await utxos(B.address)];
 
-if (au.length === 0 || bu.length === 0) {
+// Testnet faucets are rate limited to roughly one claim a day each, and the
+// no-signup ones come and go, so funding both locks in one sitting is often
+// not possible. Run whatever the funding allows and say plainly what was left
+// uncovered, rather than refusing to do anything until both are ready.
+if (au.length === 0 && bu.length === 0) {
   line();
   rule("=");
-  line("FUND THEM, THEN RUN THIS AGAIN");
+  line("FUND ONE OR BOTH, THEN RUN THIS AGAIN");
   rule("=");
-  line("Search for a 'testnet4 faucet' and send a small amount to each address");
-  line(`above — anything over ${MIN_UTXO} sats. They are test coins. They are free`);
-  line("and they are not money.");
+  line("Send testnet4 coins to either address below — anything over");
+  line(`${MIN_UTXO} sats. They are test coins. They are free and they are not money.`);
   line();
-  line(`  LOCK A  ${A.address}  ${au.length ? "FUNDED" : "waiting"}`);
-  line(`  LOCK B  ${B.address}  ${bu.length ? "FUNDED" : "waiting"}`);
+  line(`  LOCK A  ${A.address}  waiting`);
+  line(`  LOCK B  ${B.address}  waiting`);
+  line();
+  line("LOCK A alone covers three of the four attempts, including both of the");
+  line("ones that must be REFUSED. One faucet claim is enough to learn something.");
   line();
   line("Then: node run-testnet.mjs");
   line();
@@ -202,11 +208,14 @@ rule("=");
 line("THE FOUR ATTEMPTS");
 rule("=");
 
-const utxoA = au[0];
-const utxoB = bu[0];
-const baseA = { utxo: utxoA, witnessScript: A.witnessScript, destination: payout, feeSats: FEE, fanKey, cosignerKey, locktime: LOCK_A, network: NETWORK };
-const baseB = { utxo: utxoB, witnessScript: B.witnessScript, destination: payout, feeSats: FEE, fanKey, cosignerKey, locktime: LOCK_B, network: NETWORK };
+const skipped = [];
+const baseA = au.length ? { utxo: au[0], witnessScript: A.witnessScript, destination: payout, feeSats: FEE, fanKey, cosignerKey, locktime: LOCK_A, network: NETWORK } : null;
+const baseB = bu.length ? { utxo: bu[0], witnessScript: B.witnessScript, destination: payout, feeSats: FEE, fanKey, cosignerKey, locktime: LOCK_B, network: NETWORK } : null;
 
+line(`LOCK A  ${au.length ? "funded, " + au[0].value + " sats" : "NOT FUNDED — its three attempts will be skipped"}`);
+line(`LOCK B  ${bu.length ? "funded, " + bu[0].value + " sats" : "NOT FUNDED — its attempt will be skipped"}`);
+
+if (baseA) {
 // 1. The fan tries to get out early. This is the promise the whole design
 //    rests on: committed money cannot be pulled back out before its date.
 await attempt({
@@ -232,14 +241,23 @@ await attempt({
   spend: buildSpend({ ...baseA, route: "purchase", signers: ["fan", "cosigner"] }),
   why: "this is how locked money reaches a deal before its date",
 });
+} else {
+  skipped.push("Fan alone tries to go home BEFORE the date");
+  skipped.push("Co-signer alone tries to move the coin");
+  skipped.push("Fan + co-signer move it into a purchase");
+}
 
 // 4. Fan alone goes home, after the date. Must work, with nobody's help.
-await attempt({
-  name: "Fan alone goes home AFTER the date",
-  expect: "accept",
-  spend: buildSpend({ ...baseB, route: "home", signers: ["fan"] }),
-  why: "nobody can stop this and nobody needs to be asked",
-});
+if (baseB) {
+  await attempt({
+    name: "Fan alone goes home AFTER the date",
+    expect: "accept",
+    spend: buildSpend({ ...baseB, route: "home", signers: ["fan"] }),
+    why: "nobody can stop this and nobody needs to be asked",
+  });
+} else {
+  skipped.push("Fan alone goes home AFTER the date");
+}
 
 // --- Verdict ---------------------------------------------------------------
 
@@ -251,8 +269,18 @@ for (const r of results) {
   line(`  ${r.pass ? "PASS" : "FAIL"}  ${r.name}`);
 }
 line();
+for (const name of skipped) line(`  ----  ${name}  (not funded, not attempted)`);
+line();
 const failed = results.filter((r) => !r.pass).length;
-if (failed === 0) {
+if (skipped.length) {
+  line(`${skipped.length} attempt(s) could not be made because their lock has no coins.`);
+  line("Fund it and run this again; nothing already proven has to be redone.");
+  line();
+}
+if (failed === 0 && results.length) {
+  line(`All ${results.length} attempt(s) that could be made behaved as specified.`);
+}
+if (failed === 0 && !skipped.length) {
   line("The lock behaves exactly as the declaration describes it.");
   line("Committed money cannot be withdrawn early. It cannot be taken by anyone.");
   line("It can reach a purchase with the owner's consent, and it comes home on");
