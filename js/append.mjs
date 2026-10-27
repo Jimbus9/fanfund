@@ -10,7 +10,7 @@
 // who did not sign, because it cannot produce a signature. It can only accept
 // a valid one, refuse an invalid one, or refuse a duplicate.
 
-import { verifyMembership } from "../js/verify.mjs";
+import { verifyMembership } from "./verify.mjs";
 
 /** Addresses are compared in canonical lower case; bech32 is case-insensitive. */
 function normalise(address) {

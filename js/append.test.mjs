@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { addRegistration } from "./append.mjs";
-import { membershipStatement } from "../js/crowdlock.mjs";
+import { membershipStatement } from "./crowdlock.mjs";
 
 const R = join(dirname(fileURLToPath(import.meta.url)), "..");
 const crowdlock = JSON.parse(readFileSync(join(R, "crowdlocks/kop-fund.json"), "utf8"));
