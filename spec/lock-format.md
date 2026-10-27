@@ -152,6 +152,50 @@ Given a lock address, an owner key, a co-signer key and a locktime:
 The co-signer therefore cannot lock their own coins with their co-signing key.
 Anyone who is both a member and a co-signer uses a separate key for each role.
 
+## Publishing a lock
+
+A lock address is the hash of its script, so the chain shows only some coins at
+some address until the lock is spent. Nobody can find a lock by looking. Its
+owner publishes the terms, and anybody can then check them with the four steps
+above.
+
+A lock on the register is a record of exactly these fields:
+
+| Field | What it is |
+| --- | --- |
+| `address` | The lock address |
+| `member` | The address the owner key hashes to — the member who owns it |
+| `owner_pubkey` | The owner's compressed public key, hex |
+| `cosigner_pubkey` | The co-signer key the lock names, hex. Must be one of this Crowdlock's `cosigner_keys` |
+| `locktime` | The locktime as a number |
+| `unlocks` | The same date written as `YYYY-MM-DD`, for reading at a glance |
+| `submitted` | When it was published |
+
+Before a lock is published, the register checks that:
+
+1. it passes "Verifying a lock" above — two different keys, and the address
+   rebuilds from the terms;
+2. its co-signer key is this Crowdlock's, because a lock is counted by the
+   Crowdlock whose co-signer it names;
+3. its locktime is a date, not already past, and no longer than the longest
+   offered length plus a month;
+4. its owner is a member — the owner key hashes to an address on the register;
+5. it is not already on the register;
+6. confirmed coins are at the address. Until a coin has confirmed there is
+   nothing on the chain to point at, and publishing empty addresses would let
+   anybody fill the register for free.
+
+A lock **below the minimum is still published**. The minimum is a counting rule,
+not a validity rule; such a lock is shown and not counted.
+
+**Submit** either way, and both count the same:
+
+- Post the three terms — `owner_pubkey`, `cosigner_pubkey`, `locktime` — to the
+  Crowdlock's `lock_endpoint`, if it publishes one. It runs the checks above and
+  adds the record. It can refuse a lock but cannot invent one, because the terms,
+  not the endpoint, decide who can ever move the coins.
+- Open a pull request adding the record to the registrations file.
+
 Changing any single element — either key, the locktime, the order of the keys —
 produces a different address. A lock therefore commits to its own terms, and
 those terms cannot be altered after coins are sent to it.

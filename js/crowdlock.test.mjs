@@ -89,6 +89,8 @@ refuses("An uncompressed or malformed co-signer key",
   checkCrowdlock({ ...kop, cosigner_keys: ["04" + "ab".repeat(64)] }), "not a compressed public key");
 refuses("A join endpoint that is not https",
   checkCrowdlock({ ...kop, join_endpoint: "http://example.com/join/submit" }), "join_endpoint");
+refuses("A lock endpoint that is not https",
+  checkCrowdlock({ ...kop, lock_endpoint: "http://example.com/lock/submit" }), "lock_endpoint");
 refuses("A join endpoint that is not text",
   checkCrowdlock({ ...kop, join_endpoint: 42 }), "join_endpoint");
 { const { join_endpoint, ...noEndpoint } = kop;

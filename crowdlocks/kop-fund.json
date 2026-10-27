@@ -29,5 +29,6 @@
     "destinations": "destinations.json"
   },
   "chain_api": "https://mempool.space/api",
-  "join_endpoint": "https://kop-fund.jimmyhy29.workers.dev/join/submit"
+  "join_endpoint": "https://kop-fund.jimmyhy29.workers.dev/join/submit",
+  "lock_endpoint": "https://kop-fund.jimmyhy29.workers.dev/lock/submit"
 }

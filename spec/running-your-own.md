@@ -123,6 +123,7 @@ Fund's is `crowdlocks/kop-fund.json`: copy it and change the values.
 | `chain_api` | Where the register reads balances from. Anybody can swap in their own | mempool.space |
 | `disclaimer` | Optional. Shown on your register page | Not affiliated with Liverpool FC |
 | `join_endpoint` | Optional. An https address that accepts signed registrations, so clients and apps can submit without GitHub. It can refuse but never forge; the pull request route stays open | The Kop Fund's Cloudflare Worker |
+| `lock_endpoint` | Optional. The same for locks: an https address that checks a lock's terms against the chain and publishes it. Can refuse but never invent a lock; the pull request route stays open | The Kop Fund's Cloudflare Worker |
 
 Choose them deliberately. Shorter windows suit a smaller, more connected crowd; a
 higher minimum suits fewer, larger contributors; a longer destination wait suits

@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { verifyMembership } from "./verify.mjs";
 import { checkRegisterFiles, membershipStatement } from "./crowdlock.mjs";
+import { lockAddress, hrpFor } from "./lockrecord.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => JSON.parse(readFileSync(join(root, p), "utf8"));
@@ -68,6 +69,16 @@ const known = new Set(addresses);
 for (const lock of locks) {
   check(`Lock ${lock.address?.slice(0, 12) ?? "?"}… belongs to a registered member`,
     known.has(lock.member), `member ${lock.member}`);
+  // The lock must rebuild from the terms it publishes, or it is not that lock.
+  let rebuilt = null;
+  try {
+    rebuilt = lockAddress({ ownerPubkey: lock.owner_pubkey, cosignerPubkey: lock.cosigner_pubkey,
+      locktime: lock.locktime }, hrpFor(crowdlock.network));
+  } catch { /* reported below */ }
+  check(`Lock ${lock.address?.slice(0, 12) ?? "?"}… rebuilds from its own published terms`,
+    rebuilt === lock.address, rebuilt ?? "terms missing or malformed");
+  check(`Lock ${lock.address?.slice(0, 12) ?? "?"}… names this Crowdlock's co-signer`,
+    (crowdlock.cosigner_keys ?? []).includes(lock.cosigner_pubkey));
 }
 
 console.log();

@@ -105,9 +105,12 @@ export function checkCrowdlock(c, { declarationText } = {}) {
   // is allowed — joining by pull request needs no endpoint — but if it is
   // given it must be a plain https address, because clients post signatures
   // to it and an app reads it straight from this file.
-  if (c.join_endpoint !== undefined) {
-    need(typeof c.join_endpoint === "string" && /^https:\/\/[^\s]+$/.test(c.join_endpoint) && c.join_endpoint.length <= 200,
-      "join_endpoint, if given, must be an https address");
+  // lock_endpoint is the same idea for locks: optional, https if given.
+  for (const k of ["join_endpoint", "lock_endpoint"]) {
+    if (c[k] !== undefined) {
+      need(typeof c[k] === "string" && /^https:\/\/[^\s]+$/.test(c[k]) && c[k].length <= 200,
+        `${k}, if given, must be an https address`);
+    }
   }
 
   return { ok: problems.length === 0, problems };
