@@ -109,6 +109,29 @@ export function describeLocktime(locktime) {
 }
 
 /**
+ * The smallest amount an output may carry and still be relayed.
+ *
+ * Below this a transaction is valid but no node will pass it on, so it never
+ * reaches a miner. It simply does not happen, with no error anywhere — which
+ * is the worst way for a fan's withdrawal to fail, because the coin still sits
+ * in the lock and nothing explains why.
+ *
+ * Bitcoin Core's rule, which is three times the output's cost in bytes at the
+ * dust relay fee. Those bytes include what it will one day cost somebody to
+ * spend this output, hence the witness or scriptSig allowance. Gives the
+ * familiar numbers: 294 for a P2WPKH output, 330 for P2WSH and P2TR, 546 for
+ * a legacy P2PKH.
+ */
+export function dustThreshold(outputScript) {
+  const len = outputScript.length;
+  // A witness program is OP_n, a push opcode, then 20 or 32 bytes.
+  const isWitness = (len === 22 || len === 34)
+    && (outputScript[0] === opcodes.OP_0 || (outputScript[0] >= opcodes.OP_1 && outputScript[0] <= opcodes.OP_16));
+  const spendAllowance = isWitness ? 67 : 148;
+  return 3 * (8 + 1 + len + spendAllowance);
+}
+
+/**
  * Build one spending attempt.
  *
  * route: "home"     — IF branch, fan alone, only valid at or after the locktime
@@ -133,8 +156,51 @@ export function buildSpend({
   locktime,
   network,
   nSequence = 0xfffffffe, // anything below 0xffffffff so nLockTime is honoured
+  allowHighFee = false,
 }) {
   if (route !== "home" && route !== "purchase") throw new Error(`unknown route: ${route}`);
+
+  // Everything below here is arithmetic on somebody's money, and the output
+  // value is a subtraction. An unchecked subtraction is how a wallet pays a
+  // fee larger than the coin, or produces an output nobody will relay, and
+  // neither failure announces itself: the first is refused by the network
+  // with a message nobody reads, the second is accepted by nothing at all and
+  // simply never happens.
+  if (!/^[0-9a-f]{64}$/i.test(utxo?.txid ?? "")) throw new Error("utxo.txid must be a 64-character hex transaction id");
+  if (!Number.isInteger(utxo?.vout) || utxo.vout < 0) throw new Error("utxo.vout must be a whole number, zero or more");
+  if (!Number.isInteger(utxo?.value) || utxo.value <= 0) throw new Error("utxo.value must be a positive whole number of satoshis");
+  if (!Number.isInteger(feeSats) || feeSats < 0) throw new Error("feeSats must be a whole number of satoshis, zero or more");
+
+  let outputScript;
+  try {
+    outputScript = bitcoin.address.toOutputScript(destination, network);
+  } catch {
+    throw new Error(`destination is not an address this network recognises: ${destination}`);
+  }
+
+  const sendSats = utxo.value - feeSats;
+  if (sendSats <= 0) {
+    throw new Error(`fee of ${feeSats} leaves nothing of a ${utxo.value} satoshi coin`);
+  }
+
+  const dust = dustThreshold(outputScript);
+  if (sendSats < dust) {
+    throw new Error(
+      `a ${sendSats} satoshi output is dust for this address type and would never be relayed; ` +
+      `needs at least ${dust}`,
+    );
+  }
+
+  // A fee swallowing most of the coin is almost always a units mistake — sats
+  // typed where bitcoin was meant, or a rate multiplied by the wrong size.
+  // Sweeping a nearly-dust lock is the honest exception, so this can be
+  // overridden rather than being impossible.
+  if (!allowHighFee && feeSats > utxo.value / 2) {
+    throw new Error(
+      `fee of ${feeSats} takes more than half of a ${utxo.value} satoshi coin; ` +
+      `pass allowHighFee if that is really meant`,
+    );
+  }
 
   const tx = new Transaction();
   tx.version = 2;
@@ -145,7 +211,7 @@ export function buildSpend({
   tx.locktime = route === "home" ? locktime : 0;
 
   tx.addInput(Buffer.from(utxo.txid, "hex").reverse(), utxo.vout, nSequence);
-  tx.addOutput(bitcoin.address.toOutputScript(destination, network), utxo.value - feeSats);
+  tx.addOutput(outputScript, sendSats);
 
   const sighash = tx.hashForWitnessV0(0, witnessScript, utxo.value, Transaction.SIGHASH_ALL);
 

@@ -18,7 +18,7 @@ const { compileMiniscript, satisfier } = miniscript;
 import * as ecc from "tiny-secp256k1";
 import {
   ECPair, lockScript, lockAddress, buildSpend, describeLocktime, networkFor,
-  LOCKTIME_THRESHOLD,
+  dustThreshold, LOCKTIME_THRESHOLD,
 } from "./lock.mjs";
 
 const NETWORK = networkFor("testnet");
@@ -213,6 +213,68 @@ line(`  txid     ${home.txid}`);
 line(`  locktime ${home.tx.locktime}  (a node must reject this until the chain reaches it)`);
 line();
 line("Run run-testnet.mjs on a machine with internet access to prove enforcement.");
+
+// ---------------------------------------------------------------------------
+// What buildSpend refuses to build
+// ---------------------------------------------------------------------------
+//
+// Every value here is somebody's money, and the output is a subtraction. An
+// unchecked subtraction pays a fee larger than the coin, or makes an output
+// no node will relay — and neither announces itself. The dust one is the
+// crueller: the transaction is valid, nothing passes it on, nothing errors,
+// and the coin simply stays in the lock with no explanation.
+
+line();
+rule();
+line("WHAT IT REFUSES TO BUILD");
+rule();
+line();
+
+// The thresholds Bitcoin Core actually uses, checked rather than asserted.
+const scriptFor = (addr) => bitcoin.address.toOutputScript(addr, NETWORK);
+const p2wpkh = bitcoin.payments.p2wpkh({ pubkey: fanPubkey, network: NETWORK }).address;
+const p2wsh = lockAddress({ fanPubkey, cosignerPubkey, locktime: LOCKTIME, network: NETWORK }).address;
+const p2pkh = bitcoin.payments.p2pkh({ pubkey: fanPubkey, network: NETWORK }).address;
+
+check("Dust threshold for a P2WPKH output", dustThreshold(scriptFor(p2wpkh)), 294, "Bitcoin Core's figure");
+check("Dust threshold for a P2WSH output", dustThreshold(scriptFor(p2wsh)), 330);
+check("Dust threshold for a legacy P2PKH output", dustThreshold(scriptFor(p2pkh)), 546,
+  "legacy outputs cost more to spend, so the floor is higher");
+
+const spendWith = (extra) => refuses(() => buildSpend({ ...common, route: "home", signers: ["fan"], ...extra }));
+
+check("A fee larger than the coin is refused",
+  spendWith({ feeSats: utxo.value + 1 }), true, "otherwise the output value goes negative");
+check("A fee exactly equal to the coin is refused",
+  spendWith({ feeSats: utxo.value }), true, "leaves an output of nothing");
+check("An output below the dust limit is refused",
+  spendWith({ feeSats: utxo.value - 200 }), true, "valid, unrelayable, and silent — the worst kind of failure");
+// 588 sats, 294 of it fee: an output of exactly 294, with the fee at exactly
+// half, so this isolates the dust boundary from the high-fee guard.
+check("An output exactly at the dust limit is allowed",
+  spendWith({ utxo: { ...utxo, value: 588 }, feeSats: 294 }), false,
+  "294 is relayable, so refusing it would be our own invention, not Bitcoin's rule");
+check("A negative fee is refused", spendWith({ feeSats: -1 }), true, "would pay out more than the coin holds");
+check("A fractional fee is refused", spendWith({ feeSats: 300.5 }), true, "satoshis are whole");
+check("A fee taking more than half the coin is refused",
+  spendWith({ feeSats: Math.floor(utxo.value / 2) + 1 }), true, "almost always a units mistake");
+check("…unless it is explicitly allowed",
+  spendWith({ feeSats: Math.floor(utxo.value / 2) + 1, allowHighFee: true }), false,
+  "sweeping a nearly-dust lock is the honest exception");
+
+check("A destination this network does not recognise is refused",
+  spendWith({ destination: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" }), true,
+  "a mainnet address on testnet");
+check("A destination that is not an address at all is refused",
+  spendWith({ destination: "the society" }), true);
+check("A coin with a nonsense transaction id is refused",
+  spendWith({ utxo: { ...utxo, txid: "not a txid" } }), true);
+check("A coin with a negative output index is refused",
+  spendWith({ utxo: { ...utxo, vout: -1 } }), true);
+check("A coin worth nothing is refused",
+  spendWith({ utxo: { ...utxo, value: 0 } }), true);
+check("A coin whose value is fractional is refused",
+  spendWith({ utxo: { ...utxo, value: 1000.5 } }), true, "satoshis are whole here too");
 
 line();
 rule();

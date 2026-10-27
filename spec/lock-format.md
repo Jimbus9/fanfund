@@ -248,6 +248,38 @@ offline. Its enforcement has not yet been proven on a live network — unlike th
 P2WSH form, which now has been — which is the
 only reason this document still specifies P2WSH first.
 
+## What a spend refuses to build
+
+A spend's output value is the coin minus the fee, and an unchecked subtraction
+is how a wallet quietly destroys somebody's money. These are refused at
+construction rather than discovered afterwards:
+
+| Refused | Why |
+| --- | --- |
+| A fee larger than or equal to the coin | The output value goes negative or to nothing |
+| A negative or fractional fee | Would pay out more than the coin holds; satoshis are whole |
+| An output below the dust limit | Valid, but no node relays it, so it never reaches a miner |
+| A fee taking more than half the coin | Almost always satoshis typed where bitcoin was meant |
+| A destination of another network, or not an address | Caught here rather than by a node, with a readable reason |
+| A coin with a malformed id, a negative index, or no value | Not a coin |
+
+**The dust rule is the one worth understanding**, because it is the only
+failure on this list that is silent. A transaction paying an output below the
+dust limit is perfectly valid. It is simply not relayed, by anybody — so it
+never reaches a miner, nothing rejects it, no error appears anywhere, and the
+coin sits in the lock as though the attempt had never been made. A fan would
+have no way to know why.
+
+The threshold is Bitcoin Core's: three times what the output costs in bytes at
+the dust relay fee, counting what it will one day cost to spend it. That gives
+**294 satoshis for a `bc1q` output, 330 for `bc1p` or a P2WSH, and 546 for a
+legacy address** — and the implementation is checked against those figures
+rather than trusting the arithmetic.
+
+The half-the-coin rule is a judgement rather than a rule of Bitcoin's, so it
+can be overridden. Sweeping a nearly worthless lock is the honest case where a
+fee really is most of the coin.
+
 ## Reference implementation
 
 `lock/` in the repository. `selftest.mjs` proves the construction offline;
