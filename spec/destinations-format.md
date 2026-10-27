@@ -125,6 +125,16 @@ from its `added` field.** The `added` field is written by the attestor and could
 be backdated. The repository's own history, its mirrors, and the time a change
 became publicly visible are not in the attestor's gift.
 
+That first appearance is recorded on the entry as `firstSeen`, and **an entry
+with no `firstSeen` is refused rather than dated from `added`.** This was the
+original failing: the code said in its own comment that `added` must never be
+used, and then fell back to it whenever `firstSeen` was absent — which handed
+an attestor precisely the backdating the waiting period exists to prevent. Add
+an address this morning, write last month's date beside it, name it in a
+proposal this afternoon. An entry whose publication date nobody can establish
+is one nobody should be spending against, so it is not merely untrusted for
+age; it is not spendable at all.
+
 Fourteen days is a floor. A proposal may require longer and should, for a large
 purchase.
 
@@ -155,6 +165,32 @@ Before completing any commitment, for the destination named in its proposal:
 
 Any check failing means the commitment is not completed. All five are mechanical;
 none is a judgement call.
+
+**All five now run in code.** `destinationIsPermitted` in `lock/commitment.mjs`
+performs them, and `verifyCommitment` calls it on every commitment. Until
+26 October only three did: nothing verified an attestation signature anywhere
+in the project, so a list could have been edited freely and still read as
+attested. The specification described the check; no code performed it, and a
+check nobody performs is a comment.
+
+Three rules in particular, learned from writing it:
+
+- **Every signer must be a listed attestor.** A real signature from somebody
+  who is not on the list is still somebody who is not on the list.
+- **Two signatures from the same attestor count once.** Otherwise a single
+  attestor meets any threshold alone, and the threshold means nothing.
+- **A threshold higher than the number of attestors is a broken list**, not a
+  safe one, and is refused rather than treated as unsatisfiable.
+
+A commitment handed a destinations list with no attestor set is refused
+outright rather than checked for age alone. A list nobody vouches for is the
+attack this section exists to stop, and silently checking a weaker rule is how
+that attack would have succeeded.
+
+Attestor addresses carry the prefix of the network the instance runs on, so a
+testnet attestation is checked against testnet rules. Checking it against
+mainnet derives a different address and reports, misleadingly, that the
+signature belongs to somebody else.
 
 ## Verifying the list yourself
 

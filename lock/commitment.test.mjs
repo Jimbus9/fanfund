@@ -4,12 +4,14 @@
 // Run:  node commitment.test.mjs
 
 import * as bitcoin from "bitcoinjs-lib";
+import bitcoinMessage from "./node_modules/bitcoinjs-message/index.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ECPair, lockAddress, networkFor } from "./lock.mjs";
 import {
   buildCommitment, verifyCommitment, completeCommitment,
-  destinationLine, destinationHash, attestationStatement,
+  destinationLine, destinationHash, attestationStatement, attestationsAreValid,
+  proposalLine, proposalHash,
   chainIsIntact, destinationIsPermitted, ZERO_PREV, MAX_FEE_FRACTION,
 } from "./commitment.mjs";
 
@@ -52,19 +54,47 @@ const OTHER = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(strangerKey.publicKe
 const INSTANCE = "3a0a0bca96ec2161d98ff9da05ae885d6b8d68e55ed412bc85dcc7fb16209b96";
 const OTHER_INSTANCE = "b".repeat(64);
 
-const e1 = {
+// Two attestors, and a third party who is not one. Attestations are real
+// Bitcoin Signed Messages, produced here with an independent library, so the
+// tests prove our verification against somebody else's implementation rather
+// than against itself.
+const attestorKeyA = ECPair.makeRandom({ network: NETWORK });
+const attestorKeyB = ECPair.makeRandom({ network: NETWORK });
+const outsiderKey = ECPair.makeRandom({ network: NETWORK });
+const addrOf = (k) => bitcoin.payments.p2wpkh({ pubkey: Buffer.from(k.publicKey), network: NETWORK }).address;
+const ATTESTOR_A = addrOf(attestorKeyA);
+const ATTESTOR_B = addrOf(attestorKeyB);
+const OUTSIDER = addrOf(outsiderKey);
+const ATTESTORS = [ATTESTOR_A, ATTESTOR_B];
+
+/** Sign an entry's attestation statement as `key`. */
+const attest = (entry, key) => ({
+  address: addrOf(key),
+  signature: bitcoinMessage
+    .sign(attestationStatement(entry), Buffer.from(key.privateKey), true, { segwitType: "p2wpkh" })
+    .toString("base64"),
+});
+
+/** An entry plus a valid attestation from A, which is the normal case. */
+const attested = (entry) => ({ ...entry, attestations: [attest(entry, attestorKeyA)] });
+
+const e1 = attested({
   instance: INSTANCE, index: 1, op: "add", address: DEST,
   text: "Society receiving address for the stake purchase",
   added: "2026-11-01T12:00:00Z", prev: ZERO_PREV,
   firstSeen: "2026-11-01T12:00:00Z",
-};
-const e2 = {
+});
+const e2 = attested({
   instance: INSTANCE, index: 2, op: "add", address: OTHER,
   text: "A second address, added only recently",
   added: "2026-11-20T12:00:00Z", prev: destinationHash(e1),
   firstSeen: "2026-11-20T12:00:00Z",
-};
+});
 const LIST = [e1, e2];
+// hrp: these fixtures are testnet, and an attestor's address carries its
+// network's prefix. Checking a tb1q attestation under mainnet rules derives a
+// different address and blames the signer.
+const RULES = { attestors: ATTESTORS, threshold: 1, hrp: NETWORK.bech32 };
 
 const PROPOSAL_OPENS = "2026-11-21T00:00:00Z"; // 20 days after e1, 1 day after e2
 
@@ -86,22 +116,22 @@ check("Changing an entry breaks every entry after it",
   "tampering is visible without needing the git history");
 check("Reordering the list breaks the chain", chainIsIntact([e2, e1]).ok, false);
 
-const aged = destinationIsPermitted({ address: DEST, entries: LIST, opensAt: PROPOSAL_OPENS });
+const aged = destinationIsPermitted({ address: DEST, entries: LIST, opensAt: PROPOSAL_OPENS, ...RULES });
 check("A destination 20 days old is permitted", aged.permitted, true, "needs 14");
-const tooNew = destinationIsPermitted({ address: OTHER, entries: LIST, opensAt: PROPOSAL_OPENS });
+const tooNew = destinationIsPermitted({ address: OTHER, entries: LIST, opensAt: PROPOSAL_OPENS, ...RULES });
 check("A destination 1 day old is refused", tooNew.permitted, false, tooNew.reason);
 const unknown = destinationIsPermitted({
   address: bitcoin.payments.p2wpkh({ pubkey: ownerPubkey, network: NETWORK }).address,
-  entries: LIST, opensAt: PROPOSAL_OPENS,
+  entries: LIST, opensAt: PROPOSAL_OPENS, ...RULES,
 });
 check("An address not on the list at all is refused", unknown.permitted, false, unknown.reason);
 
-const revokedList = [...LIST, {
+const revokedList = [...LIST, attested({
   instance: INSTANCE, index: 3, op: "revoke", address: DEST, text: "Compromised",
   added: "2026-11-21T00:00:00Z", prev: destinationHash(e2),
   firstSeen: "2026-11-21T00:00:00Z",
-}];
-const revoked = destinationIsPermitted({ address: DEST, entries: revokedList, opensAt: "2026-12-01T00:00:00Z" });
+})];
+const revoked = destinationIsPermitted({ address: DEST, entries: revokedList, opensAt: "2026-12-01T00:00:00Z", ...RULES });
 check("A revoked destination is refused", revoked.permitted, false, revoked.reason);
 
 check("An entry from another instance breaks the chain",
@@ -116,9 +146,100 @@ check("A line with no instance is refused",
 
 // A backdated `added` must not buy age. firstSeen is what counts.
 const backdated = [{ ...e2, index: 1, prev: ZERO_PREV, added: "2026-01-01T00:00:00Z" }];
-const bd = destinationIsPermitted({ address: OTHER, entries: backdated, opensAt: PROPOSAL_OPENS });
+const bd = destinationIsPermitted({ address: OTHER, entries: backdated, opensAt: PROPOSAL_OPENS, ...RULES });
 check("Backdating `added` does not buy age", bd.permitted, false,
   "age comes from first public appearance, not the attestor's claim");
+
+// The same attack, in the form it actually took: omit firstSeen entirely and
+// let the code fall back to the field the attestor writes. It used to.
+const noFirstSeen = [(() => { const e = { ...e2, index: 1, prev: ZERO_PREV, added: "2026-01-01T00:00:00Z" }; delete e.firstSeen; return e; })()];
+const nfs = destinationIsPermitted({ address: OTHER, entries: noFirstSeen, opensAt: PROPOSAL_OPENS, ...RULES });
+check("An entry with no first public appearance is refused outright", nfs.permitted, false,
+  "no fallback to `added`: an undatable entry is not spendable against");
+
+// --- Attestations ----------------------------------------------------------
+//
+// The list's only protection. For a long time nothing checked these at all.
+
+line();
+line("ATTESTATIONS");
+line();
+
+check("A properly attested entry passes", attestationsAreValid(e1, RULES).ok, true);
+
+check("An entry with no attestations at all is refused",
+  attestationsAreValid({ ...e1, attestations: [] }, RULES).ok, false,
+  "the whole finding: an unattested list used to read as attested");
+
+check("An attestation by somebody who is not a listed attestor is refused",
+  attestationsAreValid({ ...e1, attestations: [attest(e1, outsiderKey)] }, RULES).ok, false,
+  "a real signature by the wrong person is still the wrong person");
+
+check("A forged signature is refused",
+  attestationsAreValid({ ...e1, attestations: [{ address: ATTESTOR_A, signature: attest(e2, attestorKeyA).signature }] }, RULES).ok,
+  false, "A's signature over a DIFFERENT entry does not attest this one");
+
+check("An attestation moved from another instance is refused",
+  attestationsAreValid(
+    { ...e1, instance: OTHER_INSTANCE, attestations: e1.attestations }, { ...RULES, threshold: 1 },
+  ).ok, false, "the statement carries the entry hash, which carries the instance");
+
+// Threshold arithmetic. The second of these is the one worth having.
+const twoOf = { attestors: ATTESTORS, threshold: 2, hrp: NETWORK.bech32 };
+check("Two attestors where two are required passes",
+  attestationsAreValid({ ...e1, attestations: [attest(e1, attestorKeyA), attest(e1, attestorKeyB)] }, twoOf).ok, true);
+
+check("One attestor signing TWICE does not meet a threshold of two",
+  attestationsAreValid({ ...e1, attestations: [attest(e1, attestorKeyA), attest(e1, attestorKeyA)] }, twoOf).ok,
+  false, "distinct signers, or one attestor could meet any threshold alone");
+
+check("A threshold higher than the number of attestors is refused",
+  attestationsAreValid(e1, { attestors: [ATTESTOR_A], threshold: 2, hrp: NETWORK.bech32 }).ok, false,
+  "a rule that can never be satisfied is a broken list, not a safe one");
+
+// --- The canonical proposal document ---------------------------------------
+
+line();
+line("THE CANONICAL PROPOSAL DOCUMENT");
+line();
+
+const P = {
+  instance: INSTANCE,
+  destination: DEST,
+  requiresPence: 440_000_000_00,
+  document: createHash("sha256").update("the proposal's prose").digest("hex"),
+  opens: "2026-11-21T00:00:00Z",
+  closes: "2026-12-19T00:00:00Z",
+  settlesBy: "2027-01-02T00:00:00Z",
+};
+
+line(`proposal line  ${proposalLine(P).slice(0, 66)}…`);
+line(`proposal hash  ${proposalHash(P)}`);
+line();
+
+check("The same proposal hashes the same way twice", proposalHash(P) === proposalHash({ ...P }), true,
+  "two people writing it out must reach the same hash, or neither can check the other");
+
+check("A different destination is a different proposal",
+  proposalHash(P) === proposalHash({ ...P, destination: OTHER }), false);
+check("A different price is a different proposal",
+  proposalHash(P) === proposalHash({ ...P, requiresPence: P.requiresPence + 1 }), false);
+check("A different prose document is a different proposal",
+  proposalHash(P) === proposalHash({ ...P, document: "f".repeat(64) }), false);
+check("The same proposal under another Crowdlock is a different proposal",
+  proposalHash(P) === proposalHash({ ...P, instance: OTHER_INSTANCE }), false,
+  "so a proposal cannot be replayed into somebody else's instance");
+
+const refusesProposal = (what, p, why) => check(what,
+  (() => { try { proposalLine(p); return false; } catch { return true; } })(), true, why);
+
+refusesProposal("A proposal with no instance", { ...P, instance: undefined }, "every proposal is bound to its declaration");
+refusesProposal("A pound figure that is not whole pence", { ...P, requiresPence: 12.5 }, "pence are integers");
+refusesProposal("A negative price", { ...P, requiresPence: -1 });
+refusesProposal("A pipe smuggled into a field", { ...P, destination: "bc1q|evil" }, "or the line could be forged by punctuation");
+refusesProposal("A window that closes before it opens", { ...P, closes: "2026-11-01T00:00:00Z" });
+refusesProposal("Settlement before the window closes", { ...P, settlesBy: "2026-12-01T00:00:00Z" });
+refusesProposal("A prose document that is not a hash", { ...P, document: "see the website" });
 
 // ---------------------------------------------------------------------------
 // A good commitment
@@ -157,7 +278,7 @@ const record = {
 };
 
 const verifyWith = (r, extra = {}) => verifyCommitment({
-  record: r, proposal: PROPOSAL, destinationEntries: LIST,
+  record: r, proposal: PROPOSAL, destinationEntries: LIST, destinationRules: RULES,
   utxoValue: utxo.value, network: NETWORK, ...extra,
 });
 
@@ -202,7 +323,7 @@ rejects("Pays somewhere other than the proposal's destination",
 // a destination that is real but too new
 rejects("Pays a destination that has not waited 14 days",
   verifyCommitment({
-    record: { ...record, tx: toOther.hex }, destinationEntries: LIST,
+    record: { ...record, tx: toOther.hex }, destinationEntries: LIST, destinationRules: RULES,
     proposal: { ...PROPOSAL, destination: OTHER },
     utxoValue: utxo.value, network: NETWORK,
   }), "needs 14");
@@ -217,7 +338,7 @@ const toUnlisted = buildCommitment({
 });
 rejects("Pays a destination nobody attested",
   verifyCommitment({
-    record: { ...record, tx: toUnlisted.hex }, destinationEntries: LIST,
+    record: { ...record, tx: toUnlisted.hex }, destinationEntries: LIST, destinationRules: RULES,
     proposal: { ...PROPOSAL, destination: UNLISTED },
     utxoValue: utxo.value, network: NETWORK,
   }), "not on the published destinations list");
@@ -225,9 +346,24 @@ rejects("Pays a destination nobody attested",
 // a revoked destination
 rejects("Pays a revoked destination",
   verifyCommitment({
-    record, proposal: PROPOSAL, destinationEntries: revokedList,
+    record, proposal: PROPOSAL, destinationEntries: revokedList, destinationRules: RULES,
     utxoValue: utxo.value, network: NETWORK,
   }), "revoked by entry");
+
+// a list nobody vouched for: the finding, in the place a commitment meets it
+rejects("A commitment whose destinations list comes with no attestor set",
+  verifyCommitment({
+    record, proposal: PROPOSAL, destinationEntries: LIST,
+    utxoValue: utxo.value, network: NETWORK,
+  }), "no attestor set");
+
+// an entry whose attestation is real but by the wrong person
+rejects("A commitment against a list attested by an outsider",
+  verifyCommitment({
+    record, proposal: PROPOSAL,
+    destinationEntries: [{ ...e1, attestations: [attest(e1, outsiderKey)] }, e2],
+    destinationRules: RULES, utxoValue: utxo.value, network: NETWORK,
+  }), "not a listed attestor");
 
 // forged owner signature
 const forged = buildCommitment({

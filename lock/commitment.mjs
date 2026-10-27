@@ -20,6 +20,7 @@ import * as ecc from "tiny-secp256k1";
 import { createHash } from "node:crypto";
 import { lockScript, lockAddress } from "./lock.mjs";
 import { isCosignerOf } from "../js/crowdlock.mjs";
+import { verifyMembership } from "../js/verify.mjs";
 
 const { Transaction, script: bscript } = bitcoin;
 
@@ -65,6 +66,62 @@ export function attestationStatement(entry) {
 }
 
 /**
+ * Are an entry's attestations real, and are there enough of them?
+ *
+ * The destinations list is the only thing standing between a supporter and
+ * sending money to an address somebody inserted. Its protection is entirely
+ * the signatures on each entry — so for a long time this project had the
+ * weakest possible version of that protection: entries carried attestations,
+ * the specification described how they were signed, and no code ever checked
+ * one. A list could have been edited freely and still read as attested.
+ *
+ * Each attestation is a Bitcoin Signed Message over attestationStatement(),
+ * which carries the entry's hash, which carries the instance. So a signature
+ * cannot be moved to another entry, another list, or another instance.
+ *
+ * Three things are required, and the second is the one that is easy to miss:
+ * every signature must verify; every signer must be a listed attestor; and
+ * two signatures from the SAME attestor count once, or a single attestor
+ * could meet any threshold alone.
+ *
+ * Returns { ok, reason, signers } — `signers` being the distinct attestors
+ * whose signatures verified.
+ */
+export function attestationsAreValid(entry, { attestors = [], threshold = 1, hrp = "bc" } = {}) {
+  if (!Number.isInteger(threshold) || threshold < 1) {
+    return { ok: false, reason: "the threshold must be a positive whole number", signers: [] };
+  }
+  if (attestors.length < threshold) {
+    return { ok: false, reason: `the list names ${attestors.length} attestor(s) but requires ${threshold}`, signers: [] };
+  }
+
+  const statement = attestationStatement(entry);
+  const permitted = new Set(attestors);
+  const signers = new Set();
+
+  for (const a of entry.attestations ?? []) {
+    const address = String(a?.address ?? "").trim();
+    if (!permitted.has(address)) {
+      return { ok: false, reason: `entry ${entry.index} is attested by ${address || "nobody"}, who is not a listed attestor`, signers: [...signers] };
+    }
+    const r = verifyMembership({ address, signature: String(a?.signature ?? ""), message: statement, hrp });
+    if (!r.valid) {
+      return { ok: false, reason: `entry ${entry.index}: ${address}'s attestation does not verify — ${r.reason}`, signers: [...signers] };
+    }
+    signers.add(address);
+  }
+
+  if (signers.size < threshold) {
+    return {
+      ok: false,
+      reason: `entry ${entry.index} has ${signers.size} valid attestation(s) from distinct attestors, needs ${threshold}`,
+      signers: [...signers],
+    };
+  }
+  return { ok: true, reason: "", signers: [...signers] };
+}
+
+/**
  * Check the hash chain runs unbroken from entry 1 to the head.
  * Returns { ok, reason }.
  */
@@ -84,11 +141,31 @@ export function chainIsIntact(entries) {
 /**
  * Is this destination permitted for a proposal opening at `opensAt`?
  *
- * `firstSeen` on an entry is its first PUBLIC appearance (the repository's own
- * history), never the `added` field, which the attestor writes and could
- * backdate.
+ * Four things must hold, and all four exist because the destinations list is
+ * the only thing standing between a supporter and an address an attacker
+ * inserted. Breaking the lock is hard; getting a line into this file is the
+ * easy attack, so this function is where the effort belongs.
+ *
+ * `firstSeen` is the entry's first PUBLIC appearance — the moment the outside
+ * world could have noticed it, taken from the repository's own history or
+ * another record the attestor does not control. It is deliberately NOT the
+ * `added` field, which the attestor writes and could set to any date they
+ * liked. This code used to fall back to `added` when `firstSeen` was absent,
+ * which handed an attestor exactly the backdating the waiting period exists
+ * to prevent: add an address today, write last month's date, propose it this
+ * afternoon. A missing `firstSeen` is now a refusal, because an entry whose
+ * publication date nobody can establish is one nobody should be spending
+ * against.
  */
-export function destinationIsPermitted({ address, entries, opensAt, minimumAgeDays = MINIMUM_AGE_DAYS }) {
+export function destinationIsPermitted({
+  address,
+  entries,
+  opensAt,
+  minimumAgeDays = MINIMUM_AGE_DAYS,
+  attestors = null,
+  threshold = null,
+  hrp = "bc",
+}) {
   const chain = chainIsIntact(entries);
   if (!chain.ok) return { permitted: false, reason: `the list itself is broken: ${chain.reason}` };
 
@@ -99,14 +176,91 @@ export function destinationIsPermitted({ address, entries, opensAt, minimumAgeDa
   const revoked = mine.filter((e) => e.op === "revoke" && e.index > added.index).pop();
   if (revoked) return { permitted: false, reason: `revoked by entry ${revoked.index}` };
 
-  const seen = Date.parse(added.firstSeen ?? added.added);
+  // Attestations are checked on the entry that put this address on the list,
+  // and on the revocation if there is one — a forged revocation is as much an
+  // attack as a forged addition, since it can strand a legitimate purchase.
+  if (attestors !== null || threshold !== null) {
+    const rules = { attestors: attestors ?? [], threshold: threshold ?? 1, hrp };
+    const att = attestationsAreValid(added, rules);
+    if (!att.ok) return { permitted: false, reason: att.reason };
+  }
+
+  if (!added.firstSeen) {
+    return {
+      permitted: false,
+      reason: `entry ${added.index} has no recorded first public appearance, so its age cannot be established`,
+    };
+  }
+
+  const seen = Date.parse(added.firstSeen);
   const opens = Date.parse(opensAt);
+  if (Number.isNaN(seen) || Number.isNaN(opens)) {
+    return { permitted: false, reason: "the entry's first appearance or the proposal's opening is not a readable date" };
+  }
+
   const ageDays = (opens - seen) / 86_400_000;
   if (!(ageDays >= minimumAgeDays)) {
     return { permitted: false, reason: `only ${ageDays.toFixed(1)} days old at the proposal's opening, needs ${minimumAgeDays}` };
   }
 
   return { permitted: true, reason: "" };
+}
+
+// ---------------------------------------------------------------------------
+// The proposal
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical proposal document: the exact bytes a proposal's hash is over.
+ *
+ * Every commitment names a proposal by hash, and verifyCommitment refuses a
+ * commitment whose named hash does not match. That check was resting on
+ * nothing: the specification said a proposal was "a published document
+ * containing, at a minimum" some fields, which is not a document — it is a
+ * description of one. Two honest people writing out the same proposal would
+ * have produced different bytes, hashed to different values, and each
+ * correctly rejected the other's commitments.
+ *
+ * So the document is defined here rather than left to each reader. Same shape
+ * as a destination entry, for the same reasons: pipe-delimited so it can be
+ * read by eye, and beginning with the instance's declaration hash so a
+ * proposal written for one Crowdlock cannot be replayed into another.
+ *
+ * Fields are fixed in number and order. "At a minimum" cannot survive in a
+ * canonical form — an optional field is a second possible document, and a
+ * second possible document is a second possible hash. Anything further a
+ * proposal wants to say belongs in its prose, which is linked by `document`
+ * and hashed as part of this line.
+ *
+ * `requires` is in pounds, because it is somebody else's invoice. `target` is
+ * in satoshis and is indicative, restated as the price moves — so it is NOT
+ * in this line. A proposal whose hash changed every time bitcoin moved would
+ * invalidate every commitment gathered so far, which is the exact failure
+ * that sank the assurance-contract design.
+ */
+export function proposalLine({ instance, destination, requiresPence, document, opens, closes, settlesBy }) {
+  if (!/^[0-9a-f]{64}$/.test(instance ?? "")) {
+    throw new Error("instance must be a 64-character hex declaration hash");
+  }
+  if (!/^[0-9a-f]{64}$/.test(document ?? "")) {
+    throw new Error("document must be the 64-character hex hash of the proposal's prose");
+  }
+  if (!Number.isInteger(requiresPence) || requiresPence <= 0) {
+    throw new Error("requires must be a positive whole number of pence");
+  }
+  for (const [name, v] of [["destination", destination], ["opens", opens], ["closes", closes], ["settlesBy", settlesBy]]) {
+    if (typeof v !== "string" || !v) throw new Error(`${name} is required`);
+    if (/[|\n\r]/.test(v)) throw new Error(`${name} may not contain | or a newline`);
+  }
+  if (!(Date.parse(opens) < Date.parse(closes))) throw new Error("closes must be after opens");
+  if (!(Date.parse(closes) <= Date.parse(settlesBy))) throw new Error("settlesBy must be at or after closes");
+
+  return `${instance}|proposal|${destination}|${requiresPence}|${document}|${opens}|${closes}|${settlesBy}`;
+}
+
+/** The hash a commitment names, and the only thing that identifies a proposal. */
+export function proposalHash(proposal) {
+  return sha256(Buffer.from(proposalLine(proposal).normalize("NFC"), "utf8")).toString("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +330,7 @@ export function verifyCommitment({
   record,                 // { proposal, lock, tx }
   proposal,               // { hash, destination, opensAt }
   destinationEntries = [],
+  destinationRules = null, // { attestors, threshold } — the destinations file's own
   utxoValue,              // the lock's value, needed to check the signature and the fee
   coinIsUnspent = null,
   network,
@@ -250,9 +405,30 @@ export function verifyCommitment({
   if (out0 !== proposal.destination) return fail(`output 0 pays ${out0}, but the proposal names ${proposal.destination}`);
   note("output 0 pays the proposal's destination", true, out0);
 
-  const permitted = destinationIsPermitted({ address: out0, entries: destinationEntries, opensAt: proposal.opensAt, minimumAgeDays });
+  // The attestors and threshold come from the destinations file itself when
+  // one is handed over, so a caller cannot accidentally check the list
+  // against a weaker rule than the list publishes. Passing the entries alone,
+  // with no attestor set, is refused rather than quietly checked for age
+  // only — an unattested list is the attack this is here to stop.
+  const rules = destinationRules ?? {};
+  if (!Array.isArray(rules.attestors) || rules.threshold === undefined) {
+    return fail("no attestor set was supplied, so the destinations list cannot be checked for attestation");
+  }
+  const permitted = destinationIsPermitted({
+    address: out0,
+    entries: destinationEntries,
+    opensAt: proposal.opensAt,
+    minimumAgeDays,
+    attestors: rules.attestors,
+    threshold: rules.threshold,
+    // An attestor's address is written in the prefix of the network this
+    // Crowdlock runs on. Checking a testnet attestation against mainnet
+    // rules derives a different address and reports, misleadingly, that the
+    // signature belongs to somebody else.
+    hrp: network?.bech32 ?? "bc",
+  });
   if (!permitted.permitted) return fail(`destination not permitted: ${permitted.reason}`);
-  note("destination is on the published list", true);
+  note("destination is attested and on the published list", true);
 
   // 7. the remainder, if any, goes back into a lock the owner still cannot escape
   const committedSats = tx.outs[0].value;

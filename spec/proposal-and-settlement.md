@@ -40,6 +40,46 @@ A published document containing, at a minimum:
 `target` is an indicative running goal and is restated as the bitcoin price
 moves.
 
+## The canonical proposal document
+
+Every commitment names its proposal by hash, and a commitment whose named hash
+does not match is refused. For a long time that check rested on nothing: the
+table above said a proposal was "a published document containing, at a
+minimum" some fields, which describes a document rather than being one. Two
+honest people writing out the same proposal would have produced different
+bytes, hashed to different values, and each correctly rejected the other's
+commitments.
+
+So the bytes are fixed. Same shape as a destination entry, and for the same
+reasons — readable by eye, and beginning with this instance's declaration hash
+so a proposal cannot be replayed into another Crowdlock:
+
+```
+<instance>|proposal|<destination>|<requires in pence>|<document>|<opens>|<closes>|<settles_by>
+```
+
+SHA-256 of that line, UTF-8, NFC normalised, no trailing newline. Built by
+`proposalLine` and `proposalHash` in `lock/commitment.mjs`.
+
+**The fields are fixed in number and order, and "at a minimum" cannot survive
+here.** An optional field is a second possible document, and a second possible
+document is a second possible hash. Anything further a proposal wishes to say
+belongs in its prose, which is referenced by `document` — the SHA-256 of that
+prose — and so is bound into the hash without having to be squeezed into a
+line.
+
+**`requires` is in whole pence**, because it is somebody else's invoice and
+floating-point pounds do not hash reliably.
+
+**`target` is deliberately absent.** It moves with the bitcoin price, and a
+proposal whose hash changed every time bitcoin moved would invalidate every
+commitment gathered up to that moment. That is precisely the failure that sank
+the assurance-contract designs, and it is not being reintroduced through the
+back door of a hash.
+
+A proposal whose window closes before it opens, or which settles before it
+closes, is refused at construction rather than published and discovered later.
+
 **`requires` is written with a margin.** Some commitments will not settle — a
 lapsed lock taken home, a supporter who moved their coins, a transaction that
 cannot be confirmed in time. The margin is built into the figure when the
