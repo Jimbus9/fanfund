@@ -10,6 +10,18 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="../style.css">
 <style>
+  /* A step number in a heading, so a reader can see where they are without
+     counting headings themselves. */
+  h2 .num {
+    display: inline-grid; place-items: center;
+    width: 30px; height: 30px; margin-right: 10px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 16px; vertical-align: 2px;
+  }
+  /* The plan at the top: the same five steps, before they begin. */
+  .plan { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 7px; }
+  .plan li { font-size: 16px; }
+
   /* The wallet picker and the live verdict are specific to this page. */
   .wallets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .wallets button {
@@ -66,29 +78,64 @@
   <section>
     <h2>What you are putting your name to</h2>
     <p>You are signing the <a href="../">Supporters' Declaration</a> — read it first if you have not. In short: supporters buying a stake in Liverpool Football Club, with nobody ever holding anybody else's money, and nothing ever paid out to any member.</p>
-    <p>The statement below carries the declaration's fingerprint. That is what stops anyone ever claiming you agreed to different words: your signature only matches this exact document.</p>
-
+    <p>You are not sending money, and you are not promising to. Signing is free and binds you to no payment, ever.</p>
     <p class="note" id="paramStatus">Loading this Crowdlock's details…</p>
-
-    <div class="block" id="statement">…</div>
-    <button class="btn" id="copyBtn" type="button">Copy the statement</button>
-    <p class="note">Copy it rather than retyping it. One wrong character and the signature will not verify.</p>
   </section>
 
   <section>
-    <h2>Sign it with your wallet</h2>
+    <h2>What is about to happen</h2>
+    <p>Five steps, and the whole thing takes about five minutes. Nothing leaves your device until the last one.</p>
+    <ol class="plan">
+      <li><b>Get a bitcoin wallet</b> — skip this if you already have one.</li>
+      <li><b>Copy one line of text</b> from this page.</li>
+      <li><b>Sign that line in your wallet.</b> This is a built-in feature called "sign message". It is not a payment.</li>
+      <li><b>Paste the result back here.</b> Your own browser checks it and tells you straight away whether it worked.</li>
+      <li><b>Press the button</b> to go on the register.</li>
+    </ol>
+    <p class="note">If you get stuck at any step, nothing is lost and nothing has been sent. Close the page and come back.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">1</span> Get a wallet, if you have not got one</h2>
+    <p>A bitcoin wallet is an app that holds your keys. You need one you control yourself — <strong>an account at an exchange will not work</strong>, because the exchange holds the keys rather than you, and most will not sign a message at all.</p>
+    <p>You do not need to put any money in it. A brand new, empty wallet signs just as well as one holding a fortune.</p>
+    <div class="stack">
+      <div class="card">
+        <b class="head">On a computer: Sparrow</b>
+        <p>Free, open source, and the one these instructions know best. Download it from <span class="mono">sparrowwallet.com</span>. When it asks, choose a <b>Native Segwit</b> wallet — that gives you an address starting <code>bc1q</code>, which is what the register accepts.</p>
+      </div>
+      <div class="card">
+        <b class="head">On a phone: BlueWallet</b>
+        <p>From your app store. Make a new wallet and it will be the right type by default.</p>
+      </div>
+    </div>
+    <p class="note"><strong>Worth ten seconds of thought before you pick.</strong> The key you sign with is the key that would own your locks if you ever commit money. Use a wallet you intend to keep and have written the recovery words down for — not one you will wipe next month. You can always register a second address later, but you would be a second member rather than the one you started as.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> Copy the statement</h2>
+    <p>This is the line you will sign. It carries the declaration's fingerprint, which is what stops anyone ever claiming you agreed to different words — your signature only matches this exact document.</p>
+
+    <div class="block" id="statement">…</div>
+    <button class="btn" id="copyBtn" type="button">Copy the statement</button>
+    <p class="note">Use the button rather than retyping it. One wrong character anywhere and the signature will not verify.</p>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span> Sign it in your wallet</h2>
     <p>Signing a message is not a transaction. It never touches the blockchain, costs no fee, and works on a wallet that has never held a penny. All it proves is that you hold the key.</p>
+    <p>Every wallet puts it in a different menu, so pick yours and the exact clicks appear below.</p>
 
     <p><strong>Which wallet are you using?</strong></p>
     <div class="wallets" id="wallets"></div>
     <div class="howto" id="howto"></div>
 
-    <p class="note" style="margin-top:18px"><strong>One thing worth ten seconds of thought.</strong> The key you sign with is the key that would own your locks if you ever commit money. Use a wallet you intend to keep and have backed up — not something you will wipe next month. You can always register a second address later, but you would be a second member rather than the one you started as.</p>
+    <p class="note" style="margin-top:18px">Your wallet will give you back two things: <b>the address</b> you signed with, and <b>the signature</b> — a long scramble of letters and numbers, usually ending in <code>=</code>. Keep both. You need them for the next step.</p>
   </section>
 
   <section>
-    <h2>Check it worked</h2>
-    <p>Paste what your wallet gave you. This page checks the signature on your own device — nothing is sent anywhere, and nothing is recorded, until you choose to submit it yourself.</p>
+    <h2><span class="num">4</span> Paste it back here</h2>
+    <p>This page checks the signature on your own device. Nothing is sent anywhere, and nothing is recorded, until you press the button in step 5.</p>
 
     <div class="field">
       <label for="addr"><b>Your address</b></label>
@@ -106,7 +153,7 @@
   </section>
 
   <section id="submitSection" hidden>
-    <h2>Submit it</h2>
+    <h2><span class="num">5</span> Join the register</h2>
     <p>This is your entire membership record. No name, no email, no account — these two fields are the whole thing.</p>
     <pre id="record"></pre>
     <button class="btn" id="copyRecord" type="button">Copy my registration</button>
