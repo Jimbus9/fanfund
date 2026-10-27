@@ -163,7 +163,7 @@ const WALLETS = [
   },
   {
     id: "ledger", name: "Ledger",
-    note: "Ledger has no message signing of its own — you drive it through Sparrow. Confirmed working.",
+    note: "Ledger Live cannot sign messages at all, so you drive the device through Sparrow. Not yet confirmed with a Ledger — if it fails for you, Electrum is the documented fallback, and please tell us which worked.",
     steps: [
       "Install Sparrow, plug the Ledger in and unlock it with the Bitcoin app open.",
       'In Sparrow: <span class="menu">File → New Wallet</span>, name it, then <span class="menu">Import Keystore</span> → <span class="menu">Native Segwit (P2WPKH)</span>.',
