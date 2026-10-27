@@ -110,7 +110,14 @@
     <p>This is your entire membership record. No name, no email, no account — these two fields are the whole thing.</p>
     <pre id="record"></pre>
     <button class="btn" id="copyRecord" type="button">Copy my registration</button>
-    <p>Two ways to submit it, and they count exactly the same:</p>
+    <div class="card">
+      <b class="head">Join now</b>
+      <p>One button. Your record is sent to the register, where the signature is checked again before anything is written.</p>
+      <button class="btn" id="joinNow" type="button">Add me to the register</button>
+      <div class="verdict-live" id="joinResult" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <p>That is the quick way. It is not the only way, and the two below count exactly the same — a signature cannot be forged, so it needs nobody's permission to pass on. If the button above is broken, or you would simply rather not route it through us, use one of these and you lose nothing:</p>
     <div class="stack">
       <div class="card">
         <b class="head">Open a pull request</b>
@@ -291,6 +298,62 @@ function check() {
 
 el("addr").addEventListener("input", check);
 el("sig").addEventListener("input", check);
+
+// --- Sending it to the register -------------------------------------------
+//
+// The endpoint checks the signature again before writing anything, so this
+// button is a convenience and not a trust decision: it can fail, refuse, or
+// be switched off without costing anybody their membership, because the two
+// routes below it do not involve us at all. Every failure here says so.
+
+const ENDPOINT = "https://kop-fund.jimmyhy29.workers.dev/join/submit";
+
+function joinOutcome(kind, head, body) {
+  const box = el("joinResult");
+  box.hidden = false;
+  box.className = "verdict-live" + (kind ? " " + kind : "");
+  box.innerHTML = `<b>${head}</b><p>${body}</p>`;
+}
+
+el("joinNow").addEventListener("click", async () => {
+  const btn = el("joinNow");
+  const address = el("addr").value.trim();
+  const signature = el("sig").value.trim();
+
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  joinOutcome("", "Sending", "Checking your signature at the register…");
+
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ address, signature }),
+    });
+    const body = await res.json();
+
+    if (res.ok && body.ok) {
+      btn.textContent = `You are member ${body.n}`;
+      joinOutcome("ok", `You are member ${body.n}`,
+        `The <a href="../register/">register</a> will show you within a minute, where your `
+        + `browser and everybody else's will check your signature for themselves.`);
+      return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Add me to the register";
+    joinOutcome("bad", "Not added", `${body.error ?? "The register refused it."}`
+      + (body.alternative ? ` You can still ${body.alternative} — nothing about that is second best.` : ""));
+  } catch {
+    // The endpoint is unreachable. This is exactly the case the two routes
+    // below exist for, so say so plainly rather than asking them to wait.
+    btn.disabled = false;
+    btn.textContent = "Add me to the register";
+    joinOutcome("bad", "Could not reach the register",
+      "Your signature is fine — this is our end, not yours. Copy your registration above "
+      + "and use either of the routes below; they count exactly the same.");
+  }
+});
 
 async function copyTo(btn, text, done) {
   try { await navigator.clipboard.writeText(text); }
