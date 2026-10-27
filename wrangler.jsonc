@@ -1,0 +1,19 @@
+{
+  // Deployment configuration for the site and its one endpoint.
+  //
+  // There is no secret here and there never should be. GITHUB_TOKEN is stored
+  // by Cloudflare as an encrypted variable and is not readable back out.
+  //
+  // The build on Cloudflare runs `npx wrangler deploy`, which installs
+  // wrangler into the build folder first. That is why .assetsignore exists:
+  // without it the publisher tries to serve its own tooling as part of the
+  // website and fails on a 137 MB binary.
+  "name": "kop-fund",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-23",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true }
+}

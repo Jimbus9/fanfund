@@ -1,0 +1,25 @@
+# What is NOT part of the published website.
+#
+# The assets directory is the repository root, so everything here would
+# otherwise be served. The build installs its own tooling into node_modules
+# before publishing, which is what broke the first deployment: a 137 MB
+# binary is not a web page.
+node_modules
+.git
+.wrangler
+.gitignore
+.assetsignore
+
+# The deployment itself, and the project's own housekeeping.
+worker.js
+wrangler.jsonc
+package.json
+package-lock.json
+bun.lock
+bun.lockb
+CLAUDE.md
+
+# Tests and the lock's development files. The source is public on GitHub,
+# which is where anybody reading the code should read it.
+js/*.test.mjs
+lock/
