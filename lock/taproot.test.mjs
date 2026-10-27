@@ -144,7 +144,7 @@ line("other exit was — including when a fan's lock would have expired.");
 line();
 rule();
 line(failures === 0
-  ? "Taproot lock behaves identically to the P2WSH one. Both are valid to use."
+  ? "Taproot lock behaves identically to the P2WSH one. Not in use — kept as a tested option."
   : `${failures} check(s) failed.`);
 rule();
 line();

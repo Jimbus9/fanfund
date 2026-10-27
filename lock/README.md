@@ -116,12 +116,16 @@ Settled on 22 October 2026:
   declaration is still free and still makes you a member; this is only about
   the money figure.
 
-## Two forms of the same lock
+## Two forms of the same lock — one of them in use
 
 `lock.mjs` builds it as **P2WSH**: both exits in one witness script, selected
-by the spender. `taproot.mjs` builds it as **P2TR**: each exit in its own leaf
-of a tapscript tree. The guarantees are identical — the owner alone after their
-date, the owner plus the co-signer at any time, nothing else.
+by the spender. This is the one in use; every lock the project makes is built
+here.
+
+`taproot.mjs` builds the same lock as **P2TR**: each exit in its own leaf of a
+tapscript tree. **Nothing calls it.** It is kept and tested so the option stays
+open. The guarantees are identical — the owner alone after their date, the
+owner plus the co-signer at any time, nothing else.
 
 Taproot is cheaper and more private. Spending reveals only the leaf used, so
 going home never shows that a purchase exit existed, and a purchase never shows
@@ -136,12 +140,15 @@ the date the lock would have expired:
 The internal key is BIP-341's suggested unspendable point, so there is no
 key-path shortcut past the two leaves.
 
-P2WSH is still the one specified first. Behaviour is what matters at this stage,
-P2WSH has the most mature tooling and the widest wallet support, and its
-enforcement has a test that runs against a live network. `taproot.test.mjs`
-proves the taproot construction offline; nothing has yet proven the network
-enforces it. Run `run-testnet.mjs` for taproot too before trusting it with
-anything.
+P2WSH is the one in use anyway. Behaviour is what matters at this stage, P2WSH
+has the most mature tooling and the widest wallet support, and its enforcement
+has a test that runs against a live network. `taproot.test.mjs` proves the
+taproot construction offline; nothing has yet proven the network enforces it.
+Run `run-testnet.mjs` for taproot too before trusting it with anything.
+
+Two things would call for switching: the co-signer becoming several keys rather
+than one, or hardware wallet support for custom tapscript catching up with its
+support for P2WSH miniscript. See `spec/lock-format.md`.
 
 ## Commitments
 

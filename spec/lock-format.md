@@ -158,9 +158,13 @@ those terms cannot be altered after coins are sent to it.
 
 ## Taproot
 
-A taproot version of this lock is implemented in `lock/taproot.mjs` and gives
-smaller witnesses and keeps the unused branch private. It changes nothing about
-the two exits.
+**Not in use.** Every lock this document specifies is P2WSH, built by
+`lock/lock.mjs`. A taproot version exists in `lock/taproot.mjs`, is tested, and
+is called by nothing. This section records what it would give and what would
+call for it, so the option stays open and nobody mistakes it for live.
+
+It gives smaller witnesses and keeps the unused branch private. It changes
+nothing about the two exits.
 
 Each exit lives in its own leaf of a tapscript tree rather than in two branches
 of one script, so a spend reveals only the leaf it used. Going home reveals 40
@@ -177,11 +181,23 @@ The internal key is BIP-341's suggested unspendable point
 Without that, whoever knew the internal key could spend a lock with no script at
 all.
 
-P2WSH is specified first because the behaviour is what matters and P2WSH has
-the widest tooling and wallet support, leaving less novel cryptography between
-the design and the proof. Taproot should be adopted before real money is
-committed at scale, and the two forms may coexist — the counting rule treats
-them identically.
+P2WSH is specified because the behaviour is what matters and P2WSH has the
+widest tooling and wallet support, leaving less novel cryptography between the
+design and the proof. In particular, Ledger and Trezor handle P2WSH miniscript
+more reliably today than custom tapscript, and a fan being able to check a lock
+with a wallet they already own outweighs the saving.
+
+Two things would call for taproot, and either is enough:
+
+- **The co-signer becoming several keys instead of one.** A tapscript tree
+  holds extra branches at no cost to the address and reveals only the branch
+  used. In P2WSH, every added co-signer key lengthens the script and every
+  spend publishes all of them.
+- **Hardware wallet support for custom tapscript catching up** with its
+  support for the P2WSH equivalent.
+
+The two forms may coexist if it comes to that — the counting rule treats them
+identically — but taproot must have its own live-network proof first.
 
 `lock/taproot.test.mjs` proves the taproot construction and its signatures
 offline. Its enforcement has not yet been proven on a live network — unlike the

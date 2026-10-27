@@ -1,5 +1,24 @@
 // The same two-exit lock, built with taproot.
 //
+// ───────────────────────────────────────────────────────────────────────────
+// NOT IN USE. Nothing in the project calls this module. Every live lock is
+// built by lock.mjs (P2WSH). It is kept, tested and working so that the
+// option stays open, not because it is part of the current design.
+//
+// It is here rather than deleted because two things would call for it:
+//
+//   * the co-signer becoming several keys instead of one. A taproot tree
+//     holds extra branches at no cost to the address and reveals only the
+//     branch used, where P2WSH grows the script and publishes all of it.
+//   * hardware wallet support for custom taproot scripts catching up with
+//     its support for the P2WSH equivalent. Today Ledger and Trezor handle
+//     P2WSH miniscript more reliably, and a fan being able to check the
+//     lock with a wallet they already own matters more than the saving.
+//
+// Do not wire this in without rerunning the testnet proof against it. The
+// behaviour is proven for lock.mjs, not for this.
+// ───────────────────────────────────────────────────────────────────────────
+//
 // Identical behaviour to the P2WSH version in lock.mjs — the owner alone after
 // their date, or the owner plus the co-signer at any time. What taproot changes
 // is the cost and the privacy:
