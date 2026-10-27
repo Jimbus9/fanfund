@@ -101,6 +101,14 @@ export function checkCrowdlock(c, { declarationText } = {}) {
   need(typeof c.register?.registrations === "string" && typeof c.register?.destinations === "string",
     "register must name the registrations and destinations files");
   need(typeof c.chain_api === "string" && /^https:\/\//.test(c.chain_api), "chain_api must be an https address");
+  // Optional. Where this Crowdlock accepts signed registrations. Leaving it out
+  // is allowed — joining by pull request needs no endpoint — but if it is
+  // given it must be a plain https address, because clients post signatures
+  // to it and an app reads it straight from this file.
+  if (c.join_endpoint !== undefined) {
+    need(typeof c.join_endpoint === "string" && /^https:\/\/[^\s]+$/.test(c.join_endpoint) && c.join_endpoint.length <= 200,
+      "join_endpoint, if given, must be an https address");
+  }
 
   return { ok: problems.length === 0, problems };
 }

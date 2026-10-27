@@ -87,6 +87,12 @@ refuses("…or as a key and its mirror",
   checkCrowdlock({ ...kop, cosigner_keys: [K("ab")], attestor_keys: [mirror(K("ab"))] }), "never be a key that spends");
 refuses("An uncompressed or malformed co-signer key",
   checkCrowdlock({ ...kop, cosigner_keys: ["04" + "ab".repeat(64)] }), "not a compressed public key");
+refuses("A join endpoint that is not https",
+  checkCrowdlock({ ...kop, join_endpoint: "http://example.com/join/submit" }), "join_endpoint");
+refuses("A join endpoint that is not text",
+  checkCrowdlock({ ...kop, join_endpoint: 42 }), "join_endpoint");
+{ const { join_endpoint, ...noEndpoint } = kop;
+  check("A Crowdlock with no join endpoint is still valid", checkCrowdlock(noEndpoint, { declarationText: decl }).ok); }
 refuses("A threshold larger than the number of attestors",
   checkCrowdlock({ ...kop, attestor_keys: [K("cd")], attestor_threshold: 2 }), "more than the number");
 refuses("A title that could break the signed statement",

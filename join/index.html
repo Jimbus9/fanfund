@@ -288,6 +288,7 @@ function drawWallets() {
 // ---------------------------------------------------------------------------
 
 let STATEMENT = null;
+let ENDPOINT = null;   // this Crowdlock's join endpoint, from its own file; may be absent
 
 async function loadCrowdlock() {
   try {
@@ -295,6 +296,7 @@ async function loadCrowdlock() {
     const name = index.crowdlocks[0];
     const c = await (await fetch(`../crowdlocks/${name}.json`)).json();
     STATEMENT = membershipStatement(c);
+    ENDPOINT = typeof c.join_endpoint === "string" && /^https:\/\//.test(c.join_endpoint) ? c.join_endpoint : null;
     el("statement").textContent = STATEMENT;
     el("paramStatus").innerHTML =
       `Signing <strong>${c.declaration.title} v${c.declaration.version}</strong> ` +
@@ -358,7 +360,9 @@ el("sig").addEventListener("input", check);
 // be switched off without costing anybody their membership, because the two
 // routes below it do not involve us at all. Every failure here says so.
 
-const ENDPOINT = "https://kop-fund.jimmyhy29.workers.dev/join/submit";
+// The endpoint's address comes from this Crowdlock's file (join_endpoint), so
+// it changes in one place and an app reads the same field. A Crowdlock with no
+// endpoint simply has no button; the two routes below still work.
 
 function joinOutcome(kind, head, body) {
   const box = el("joinResult");
@@ -371,6 +375,12 @@ el("joinNow").addEventListener("click", async () => {
   const btn = el("joinNow");
   const address = el("addr").value.trim();
   const signature = el("sig").value.trim();
+
+  if (!ENDPOINT) {
+    joinOutcome("bad", "No register button for this Crowdlock",
+      "This Crowdlock has not published a join endpoint. Copy your registration above and use either of the routes below; they count exactly the same.");
+    return;
+  }
 
   btn.disabled = true;
   btn.textContent = "Sending…";
