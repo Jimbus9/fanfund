@@ -98,10 +98,13 @@ node js/verify.test.mjs
 # every Crowdlock's own file, and its declaration's fingerprint
 node js/crowdlock.test.mjs
 
+# the live register — every published signature, checked for real
+node js/register.test.mjs
+
 # the lock's construction
 cd lock &amp;&amp; npm install &amp;&amp; node selftest.mjs
 
-# the taproot form of the same lock
+# the taproot form of the same lock, which nothing uses yet
 node taproot.test.mjs
 
 # commitments, and the destinations list that guards them

@@ -77,6 +77,31 @@ for (const f of seen) {
 }
 check("No bare import specifiers in browser code", bare.length === 0, bare.join(", ") || "all relative");
 
+// The front page carries its own copy of the declaration, so a visitor can
+// hash what they are reading rather than trust that it matches the file. Two
+// copies can drift. If they ever do, the page tells every visitor the
+// fingerprint does not match — which is the correct behaviour and a terrible
+// thing to discover in public. So the copies are compared here instead.
+{
+  const { canonicalise, declarationHash } = await import("./crowdlock.mjs");
+  const crowdlock = JSON.parse(readFileSync(join(R, "crowdlocks/kop-fund.json"), "utf8"));
+  const page = readFileSync(join(R, "index.html"), "utf8");
+  const embedded = page.match(/<script id="declText" type="text\/plain">([\s\S]*?)<\/script>/);
+  const published = page.match(/PUBLISHED\s*=\s*"([0-9a-f]{64})"/);
+
+  check("The front page embeds the declaration text", Boolean(embedded),
+    embedded ? "" : "no declText block — the in-page check cannot run");
+  check("The front page's copy of the declaration is the published one",
+    Boolean(embedded) && declarationHash(embedded[1]) === crowdlock.declaration.sha256,
+    embedded ? declarationHash(embedded[1]) : "");
+  check("The fingerprint the page checks against is the Crowdlock's",
+    published?.[1] === crowdlock.declaration.sha256, published?.[1] ?? "not found");
+  check("The declaration file itself still hashes correctly",
+    declarationHash(readFileSync(join(R, crowdlock.declaration.file), "utf8")) === crowdlock.declaration.sha256);
+  check("Canonicalisation is doing something, not passing text through",
+    canonicalise("a  \r\nb\n\n\n") === "a\nb\n");
+}
+
 console.log("\n" + "-".repeat(78));
 console.log(failures === 0
   ? "Everything the browser needs would be served."
