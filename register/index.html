@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The register — The Kop Fund</title>
-<meta name="description" content="Every member and every pound committed, checked in your own browser rather than taken on trust.">
+<meta name="description" content="Every pound committed, checked in your own browser rather than taken on trust. Locked bitcoin only — a signature is free, so signatures are not counted as support.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
@@ -28,7 +28,7 @@
   <header class="page">
     <span class="eyebrow">Checked by your browser, not by us</span>
     <h1>The register</h1>
-    <p class="lede">Every member and every pound committed. Your own browser checks each signature as this page loads — nothing here is taken on our word.</p>
+    <p class="lede">Every pound committed, and every signature behind it. Your own browser checks each signature as this page loads — nothing here is taken on our word.</p>
     <p class="note" id="whichCrowdlock" hidden></p>
   </header>
 
@@ -38,11 +38,11 @@
       <span class="label">Committed right now</span>
     </div>
     <div class="facts">
-      <div><span class="v" id="memberCount">—</span><span class="k">members</span></div>
-      <div><span class="v" id="verifiedCount">—</span><span class="k">signatures verified</span></div>
       <div><span class="v" id="lockCount">—</span><span class="k">locks</span></div>
     </div>
     <p class="note" id="asOf">Loading the register…</p>
+    <p class="note" id="signatureCount">—</p>
+    <p class="note"><strong>Why signatures are not the headline.</strong> Anybody can make a valid signature for nothing, as many times as they like, so a count of them could be inflated by one person with a script and would measure nothing. Locked bitcoin cannot be faked: every lock above costs real money and a real transaction on a public chain. So the figure this register leads with is the one that cannot be gamed, and every signature is still published below for anyone who wants to count them.</p>
   </section>
 
   <section>
@@ -224,9 +224,17 @@ const checked = members.map((m) => ({
 const verified = checked.filter((m) => m.result.valid);
 const failed = checked.filter((m) => !m.result.valid);
 
-el("memberCount").textContent = String(members.length);
-el("verifiedCount").textContent = String(verified.length);
 el("lockCount").textContent = String(locks.length);
+
+// Deliberately a sentence rather than a headline figure. See the note on the
+// page: a signature is free to produce, so a count of signatures is a record
+// of arrival and not a measure of support, and putting it in large type would
+// both overstate what we know and invite somebody to inflate it.
+el("signatureCount").textContent = members.length === 0
+  ? "No signatures on the register yet."
+  : `${members.length} signature${members.length === 1 ? "" : "s"} on the register, `
+    + `${failed.length === 0 ? "all verified" : `${verified.length} verified and ${failed.length} not`}`
+    + ". A record of who has arrived, in the order they arrived — it carries no weight, no priority and no privilege.";
 
 if (members.length === 0) {
   setVerdict(el("verdict"), el("verdictText"), true, "Nothing to check yet");

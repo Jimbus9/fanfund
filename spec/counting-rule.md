@@ -84,6 +84,17 @@ Two different numbers, and they must never be conflated.
 a measure of agreement rather than commitment, and it must never be presented
 as a financial figure.
 
+**A signatory count must never be a headline figure, and the reason is not
+modesty.** Anybody can generate keys and sign the statement as many times as
+they like, for nothing, so the number can be inflated to any size by one
+person with a script. Worse, every such signature is *valid*, so there is no
+honest way to remove them afterwards: doing so would mean an operator deciding
+which real signatures count, which this specification does not permit anywhere
+else. The defence is therefore structural rather than a guard — give the number
+no prominence worth attacking, and lead with figures that cannot be forged
+because each one costs real money and a real transaction. Publish every
+signature in full regardless, so anyone who wants to count them can.
+
 **Committed members** — distinct members holding at least one lock in state
 "locked" at or above the minimum. This is the figure to quote alongside the
 committed total, because the two describe the same group of people.

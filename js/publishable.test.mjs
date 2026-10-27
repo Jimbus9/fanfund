@@ -77,6 +77,29 @@ for (const f of seen) {
 }
 check("No bare import specifiers in browser code", bare.length === 0, bare.join(", ") || "all relative");
 
+// Every element a page's script reaches for must exist in that page's markup.
+//
+// This is the same shape of bug as the Jekyll one: the page looks fine here
+// and breaks in a browser. Renaming or removing an id in the markup without
+// updating the script throws on load, and a thrown script means a register
+// that renders nothing at all — every figure stuck on its placeholder dash,
+// with no error anyone but the visitor can see. Found worth guarding after
+// the signature counters were deliberately removed from the register page.
+{
+  const pages = ["index.html", "register/index.html", "join/index.html"];
+  for (const page of pages) {
+    const src = readFileSync(join(R, page), "utf8");
+    const ids = new Set([...src.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+    const wanted = new Set([
+      ...[...src.matchAll(/\bel\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+      ...[...src.matchAll(/getElementById\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+    ]);
+    const missing = [...wanted].filter((id) => !ids.has(id));
+    check(`${page}: every element its script reaches for exists`, missing.length === 0,
+      missing.length ? `missing: ${missing.join(", ")}` : `${wanted.size} checked`);
+  }
+}
+
 // The front page carries its own copy of the declaration, so a visitor can
 // hash what they are reading rather than trust that it matches the file. Two
 // copies can drift. If they ever do, the page tells every visitor the
