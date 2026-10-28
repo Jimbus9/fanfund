@@ -2,9 +2,10 @@
   "name": "library-check",
   "private": true,
   "type": "module",
-  "description": "Can bitcoinjs-lib + @bitcoinerlab/descriptors build and spend the exact lock? Judged by a bcoin regtest node in memory.",
+  "description": "Can bitcoinjs-lib + @bitcoinerlab/descriptors build and spend the exact lock, and can the offline machine co-sign in bulk? Judged by a bcoin regtest node in memory.",
   "scripts": {
-    "check": "NODE_BACKEND=js node check.mjs"
+    "check": "NODE_BACKEND=js node check.mjs",
+    "cosigner": "NODE_BACKEND=js node cosigner.mjs"
   },
   "dependencies": {
     "@bitcoinerlab/descriptors": "3.2.0",
