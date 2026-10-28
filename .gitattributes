@@ -4,3 +4,6 @@ spec/declaration-v1.txt -text
 
 # Timestamp proofs are binary.
 *.ots binary
+
+# The test declaration is fingerprinted the same way.
+crowdlocks/test/declaration-test-v1.txt -text

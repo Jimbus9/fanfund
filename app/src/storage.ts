@@ -19,3 +19,19 @@ export async function saveWords(words: string): Promise<void> {
 export async function forgetWords(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY);
 }
+
+// Crowdlocks the fan has added by link, beyond the starting list. Not secret,
+// but kept beside the words so removing the wallet removes them too.
+const ADDED = "crowdlock.added.v1";
+
+export async function loadAddedCrowdlocks(): Promise<string[]> {
+  try { return JSON.parse((await SecureStore.getItemAsync(ADDED)) ?? "[]"); } catch { return []; }
+}
+
+export async function saveAddedCrowdlocks(urls: string[]): Promise<void> {
+  await SecureStore.setItemAsync(ADDED, JSON.stringify(urls));
+}
+
+export async function forgetAddedCrowdlocks(): Promise<void> {
+  await SecureStore.deleteItemAsync(ADDED);
+}

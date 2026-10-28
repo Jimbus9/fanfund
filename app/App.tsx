@@ -1,8 +1,12 @@
-// Milestone 1: a wallet a fan who has never held bitcoin can use.
+// A wallet a fan who has never held bitcoin can use, and the Crowdlocks they
+// can join with it.
 //
-//   Welcome  →  New: show the 12 words → check three of them → Home
-//            →  Restore: type the 12 words → Home
-//   Home     →  the waiting balance, Add money (QR + copy), Send out
+//   Welcome    →  New: show the 12 words → check three of them → Home
+//              →  Restore: type the backup words → Home
+//   Home       →  the waiting balance, Add money (QR + copy), Send out,
+//                 and the Crowdlocks: each one checked before it is shown
+//   Crowdlock  →  its declaration, and Sign and join in one tap
+//   Add        →  any other Crowdlock, by link, checked the same way
 //
 // Every screen here is presentation. Anything touching keys or money goes
 // through src/wallet/core.mjs, and nothing else may.
@@ -15,8 +19,10 @@ import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
-import { newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend } from "./src/wallet/core.mjs";
-import { loadWords, saveWords, forgetWords } from "./src/storage";
+import { newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement } from "./src/wallet/core.mjs";
+// @ts-ignore — plain module shared with the chain tests
+import { STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin } from "./src/crowdlocks.mjs";
+import { loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks } from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
 type Screen =
@@ -26,7 +32,9 @@ type Screen =
   | { name: "checkWords"; words: string }
   | { name: "restore" }
   | { name: "home"; words: string }
-  | { name: "send"; words: string };
+  | { name: "send"; words: string }
+  | { name: "crowdlock"; words: string; url: string }
+  | { name: "addCrowdlock"; words: string };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
@@ -48,6 +56,8 @@ export default function App() {
           {screen.name === "restore" && <Restore go={setScreen} />}
           {screen.name === "home" && <Home words={screen.words} go={setScreen} />}
           {screen.name === "send" && <Send words={screen.words} go={setScreen} />}
+          {screen.name === "crowdlock" && <CrowdlockScreen words={screen.words} url={screen.url} go={setScreen} />}
+          {screen.name === "addCrowdlock" && <AddCrowdlock words={screen.words} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -181,7 +191,7 @@ function Home({ words, go }: { words: string; go: Go }) {
     "Only do this if your 12 words are written down. Without them the money cannot be recovered.",
     [
       { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); go({ name: "welcome" }); } },
+      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); await forgetAddedCrowdlocks(); go({ name: "welcome" }); } },
     ],
   );
 
@@ -206,6 +216,10 @@ function Home({ words, go }: { words: string; go: Go }) {
       </Text>
 
       <Button label="Send money out" onPress={() => go({ name: "send", words })} />
+
+      <Text style={s.h2}>Crowdlocks</Text>
+      <CrowdlockList words={words} address={account.address} go={go} />
+      <Button label="Add a Crowdlock" kind="plain" onPress={() => go({ name: "addCrowdlock", words })} />
       <Button label="Remove wallet from this phone" kind="danger" onPress={remove} />
     </View>
   );
@@ -275,6 +289,154 @@ function Send({ words, go }: { words: string; go: Go }) {
 }
 
 // ---------------------------------------------------------------------------
+// Crowdlocks
+// ---------------------------------------------------------------------------
+
+type Loaded = { ok: true; url: string; crowdlock: any; declarationText: string; statement: string; register: any }
+  | { ok: false; url: string; problems: string[] };
+
+async function allLinks(): Promise<string[]> {
+  const added = await loadAddedCrowdlocks();
+  return [...STARTING_LIST, ...added.filter((u) => !STARTING_LIST.includes(u))];
+}
+
+function CrowdlockList({ words, address, go }: { words: string; address: string; go: Go }) {
+  const [items, setItems] = useState<Loaded[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    allLinks().then((links) => Promise.all(links.map((u) => loadCrowdlock(u)))).then((r) => { if (live) setItems(r); });
+    return () => { live = false; };
+  }, []);
+
+  if (!items) return <ActivityIndicator style={{ marginVertical: 16 }} />;
+  const here = items.filter((c) => c.ok && c.crowdlock.network === NETWORK) as Extract<Loaded, { ok: true }>[];
+  const elsewhere = items.filter((c) => c.ok && c.crowdlock.network !== NETWORK) as Extract<Loaded, { ok: true }>[];
+  const broken = items.filter((c) => !c.ok) as Extract<Loaded, { ok: false }>[];
+
+  return (
+    <View>
+      {here.map((c) => {
+        const m = membershipOf(c.register, address);
+        return (
+          <Pressable key={c.url} style={s.card} onPress={() => go({ name: "crowdlock", words, url: c.url })}>
+            <Text style={s.cardTitle}>{c.crowdlock.name}</Text>
+            <Text style={s.note}>{(c.register.members ?? []).length} signed · {(c.register.locks ?? []).length} locks</Text>
+            <Text style={m ? s.good : s.link}>{m ? `You are member ${m.n}` : "Read the declaration and join →"}</Text>
+          </Pressable>
+        );
+      })}
+      {elsewhere.map((c) => (
+        <View key={c.url} style={[s.card, { opacity: 0.6 }]}>
+          <Text style={s.cardTitle}>{c.crowdlock.name}</Text>
+          <Text style={s.note}>Uses {c.crowdlock.network === "mainnet" ? "real bitcoin" : c.crowdlock.network} — not available in this {IS_TEST_MONEY ? "test " : ""}app.</Text>
+        </View>
+      ))}
+      {broken.map((c) => (
+        <View key={c.url} style={s.card}>
+          <Text style={s.error}>Refused: {c.url}</Text>
+          <Text style={s.note}>{c.problems[0]}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: Go }) {
+  const account = useMemo(() => accountFromWords(words, NETWORK), [words]);
+  const [c, setC] = useState<Loaded | null>(null);
+  const [total, setTotal] = useState<{ sats: bigint; locks: number; members: number } | null>(null);
+  const [showText, setShowText] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    const loaded: Loaded = await loadCrowdlock(url);
+    setC(loaded);
+    if (loaded.ok) committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
+  }, [url]);
+  useEffect(() => { load(); }, [load]);
+
+  if (!c) return <ActivityIndicator style={{ marginTop: 60 }} />;
+  if (!c.ok) return (
+    <View>
+      <Text style={s.h1}>Refused</Text>
+      <Text style={s.p}>This Crowdlock failed its checks, so the app will not show it or let you sign anything for it.</Text>
+      {c.problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}
+      <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+
+  const me = membershipOf(c.register, account.address);
+  const join = async () => {
+    setBusy(true); setResult(null);
+    const signature = signStatement(account, c.statement);
+    const r = await submitJoin(c.crowdlock, { address: account.address, signature });
+    setResult(r.ok ? { ok: true, text: `You are member ${r.n}.` } : { ok: false, text: r.error + (r.alternative ? ` You can still ${r.alternative}.` : "") });
+    setBusy(false);
+    if (r.ok) setTimeout(load, 4000);
+  };
+
+  return (
+    <View>
+      <Text style={s.h1}>{c.crowdlock.name}</Text>
+      {c.crowdlock.about && <Text style={s.p}>{c.crowdlock.about}</Text>}
+      {c.crowdlock.disclaimer && <Text style={s.note}>{c.crowdlock.disclaimer}</Text>}
+
+      <View style={s.panel}>
+        <Text style={s.big}>{total ? btc(total.sats) : "…"}</Text>
+        <Text style={s.note}>locked and counted{total ? ` · ${total.locks} lock${total.locks === 1 ? "" : "s"}` : ""} · {(c.register.members ?? []).length} signed</Text>
+        <Text style={s.good}>Checked on this phone: the declaration matches its fingerprint and the register agrees.</Text>
+      </View>
+
+      <Text style={s.h2}>The declaration</Text>
+      {showText
+        ? <Text style={s.declaration}>{c.declarationText}</Text>
+        : <Button label="Read it in full" kind="plain" onPress={() => setShowText(true)} />}
+      <Text style={s.label}>What you sign</Text>
+      <Text style={s.mono}>{c.statement}</Text>
+
+      {me
+        ? <Text style={[s.good, { fontSize: 18, marginTop: 16 }]}>You are member {me.n}. Signed {me.signed}.</Text>
+        : c.crowdlock.network !== NETWORK
+          ? <Text style={s.note}>This Crowdlock uses a different network from this app.</Text>
+          : <>
+              <Text style={s.note}>Signing is free and moves no money. It proves this wallet agrees to the declaration, and the register checks it before adding you.</Text>
+              <Button label={busy ? "Signing and sending…" : "Sign and join"} disabled={busy} onPress={join} />
+            </>}
+      {result && <Text style={result.ok ? s.good : s.error}>{result.text}</Text>}
+      <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+}
+
+function AddCrowdlock({ words, go }: { words: string; go: Go }) {
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problems, setProblems] = useState<string[] | null>(null);
+
+  const add = async () => {
+    setBusy(true); setProblems(null);
+    const loaded: Loaded = await loadCrowdlock(link);
+    setBusy(false);
+    if (!loaded.ok) { setProblems(loaded.problems); return; }
+    const added = await loadAddedCrowdlocks();
+    if (!added.includes(loaded.url) && !STARTING_LIST.includes(loaded.url)) await saveAddedCrowdlocks([...added, loaded.url]);
+    go({ name: "crowdlock", words, url: loaded.url });
+  };
+
+  return (
+    <View>
+      <Text style={s.h1}>Add a Crowdlock</Text>
+      <Text style={s.p}>Paste the link to a Crowdlock's file. It is checked on this phone, the same way the register page checks it, before it is added.</Text>
+      <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} placeholder="https://…/crowdlocks/name.json" value={link} onChangeText={(t) => { setLink(t); setProblems(null); }} />
+      {problems && <><Text style={s.error}>Refused:</Text>{problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}</>}
+      <Button label={busy ? "Checking…" : "Check and add"} disabled={busy || !link} onPress={add} />
+      <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 
 function btc(sats: bigint) {
   const neg = sats < 0n; const v = neg ? -sats : sats;
@@ -319,4 +481,8 @@ const s = StyleSheet.create({
   btnDanger: { backgroundColor: "transparent", marginTop: 40 },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   btnTextPlain: { color: "#111" },
+  card: { borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 14, marginTop: 10 },
+  cardTitle: { fontSize: 17, fontWeight: "700", color: "#111" },
+  link: { fontSize: 15, color: RED, fontWeight: "600", marginTop: 4 },
+  declaration: { fontSize: 15, lineHeight: 22, color: "#222", marginVertical: 8 },
 });

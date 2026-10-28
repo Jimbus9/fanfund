@@ -29,13 +29,23 @@
 // hand-rolled here and got wrong.
 
 import { addRegistration } from "./js/append.mjs";
-import { prepareLock, addLock } from "./js/lockrecord.mjs";
+import { prepareLock, addLock, hrpFor } from "./js/lockrecord.mjs";
 import { membershipStatement } from "./js/crowdlock.mjs";
 
 const REPO = "Jimbus9/fanfund";
 const BRANCH = "main";
-const CROWDLOCK = "crowdlocks/kop-fund.json";
-const REGISTER = "registrations.json";
+// Which Crowdlock a request is for, named by its file in crowdlocks/: the
+// ?c= parameter, or The Kop Fund when there is none. Only a plain name is
+// accepted, so a request can never point outside that folder. Each Crowdlock's
+// own file then says where its register lives — nothing else is written in
+// here, so a test Crowdlock on testnet4 and The Kop Fund on mainnet are served
+// by the same code and can never write to each other's register.
+const DEFAULT_CROWDLOCK = "kop-fund";
+const REGISTER = "the register file";   // for messages only; the real path comes from the Crowdlock
+function crowdlockName(request) {
+  const c = new URL(request.url).searchParams.get("c") ?? DEFAULT_CROWDLOCK;
+  return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : null;
+}
 
 const json = (status, body) =>
   new Response(JSON.stringify(body, null, 2), {
@@ -105,15 +115,21 @@ function toBase64(text) {
  * `decide(register, crowdlock)` returns either a refusal { ok: false, status,
  * reason } or { ok: true, register, commitMessage, reply, writeFailure }.
  */
-async function updateRegister(token, decide, alternative) {
+async function updateRegister(token, name, decide, alternative) {
   const ATTEMPTS = 3;
   let lastWriteFailure = "the register could not be written just now";
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-    let crowdlock, register, sha;
+    let crowdlock, register, sha, registerPath;
     try {
-      crowdlock = JSON.parse((await readFile(token, CROWDLOCK)).text);
-      const current = await readFile(token, REGISTER);
+      crowdlock = JSON.parse((await readFile(token, `crowdlocks/${name}.json`)).text);
+    } catch (e) {
+      if (e?.status === 404) return json(404, { error: `there is no Crowdlock called ${name} here` });
+      return json(502, { error: "could not read the register just now — nothing was changed", alternative });
+    }
+    try {
+      registerPath = crowdlock.register.registrations;
+      const current = await readFile(token, registerPath);
       register = JSON.parse(current.text);
       sha = current.sha;
     } catch {
@@ -125,7 +141,7 @@ async function updateRegister(token, decide, alternative) {
     lastWriteFailure = outcome.writeFailure ?? lastWriteFailure;
 
     try {
-      await gh(token, `contents/${REGISTER}`, {
+      await gh(token, `contents/${registerPath}`, {
         method: "PUT",
         body: JSON.stringify({
           message: outcome.commitMessage,
@@ -165,7 +181,10 @@ async function join(request, env) {
     return json(400, { error: "that was not JSON" });
   }
 
-  return updateRegister(token, (register, crowdlock) => {
+  const name = crowdlockName(request);
+  if (!name) return json(400, { error: "that is not a Crowdlock name" });
+
+  return updateRegister(token, name, (register, crowdlock) => {
     // Rebuilt from the Crowdlock's own file on every request, never taken from
     // the submission and never written in here. If the declaration ever
     // changed, this would start verifying against the new one with no redeploy.
@@ -176,9 +195,13 @@ async function join(request, env) {
         reason: "the register and the Crowdlock disagree about the declaration; refusing to write" };
     }
 
+    const hrp = hrpFor(crowdlock.network);
+    if (!hrp) return { ok: false, status: 500, reason: "this Crowdlock names a network the register does not know" };
+
     const outcome = addRegistration(register, submission, {
       statement,
       today: new Date().toISOString().slice(0, 10),
+      hrp,
     });
     if (!outcome.ok) return outcome;
 
@@ -217,7 +240,10 @@ async function submitLock(request, env) {
     return json(400, { error: "that was not JSON" });
   }
 
-  return updateRegister(token, async (register, crowdlock) => {
+  const name = crowdlockName(request);
+  if (!name) return json(400, { error: "that is not a Crowdlock name" });
+
+  return updateRegister(token, name, async (register, crowdlock) => {
     const prepared = prepareLock(submission, {
       crowdlock, register, now: Math.floor(Date.now() / 1000),
     });

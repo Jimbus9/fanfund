@@ -14,7 +14,10 @@
 import { createRequire } from "node:module";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, NETWORKS, DUST_SATS,
+  signStatement,
 } from "../src/wallet/core.mjs";
+import { verifyMembership } from "../../js/verify.mjs";
+import bitcoinMessage from "../../lock/node_modules/bitcoinjs-message/index.js";
 
 const require = createRequire(import.meta.url);
 const bcoin = require("bcoin");
@@ -57,6 +60,34 @@ const vector = "abandon abandon abandon abandon abandon abandon abandon abandon 
 check("The standard BIP84 test words give the standard first address",
   accountFromWords(vector, "mainnet").address === "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
   accountFromWords(vector, "mainnet").address);
+
+// ---------------------------------------------------------------------------
+rule("SIGNING A DECLARATION (milestone 2)");
+
+// A signature the register cannot verify would turn a fan away at the door,
+// so each one is checked by the register's own verifier and by bitcoinjs-
+// message, the library BlueWallet uses — two independent judges.
+const statement = "I agree to the Test Declaration v1 (sha256:29f943a5bf2c110200cb33d0299b00960b19f10f1942d14699aec154b39316df) and join as a member.";
+for (const net of ["testnet4", "mainnet"]) {
+  const acct = accountFromWords(words, net);
+  const sig = signStatement(acct, statement);
+  const hrp = net === "mainnet" ? "bc" : "tb";
+  const ours = verifyMembership({ address: acct.address, signature: sig, message: statement, hrp });
+  check(`On ${net}: the register's verifier accepts the app's signature`, ours.valid, ours.reason ?? "");
+  let theirs = false;
+  try { theirs = bitcoinMessage.verify(statement, acct.address, sig, null, true); } catch (e) { theirs = e.message; }
+  check(`On ${net}: bitcoinjs-message accepts it too`, theirs === true, String(theirs));
+  check(`On ${net}: it is the same kind of signature Sparrow made for member 1`,
+    Buffer.from(sig, "base64")[0] >= 31 && Buffer.from(sig, "base64")[0] <= 34);
+}
+const acct = accountFromWords(words, "testnet4");
+const sig = signStatement(acct, statement);
+check("Signing is deterministic (same words, same statement, same signature)", signStatement(acct, statement) === sig);
+check("A signature over one statement does not verify for another",
+  !verifyMembership({ address: acct.address, signature: sig, message: statement.replace("v1", "v2"), hrp: "tb" }).valid);
+const other = accountFromWords(newWords(), "testnet4");
+check("Another wallet's signature does not verify for this address",
+  !verifyMembership({ address: acct.address, signature: signStatement(other, statement), message: statement, hrp: "tb" }).valid);
 
 // ---------------------------------------------------------------------------
 rule("A PRIVATE CHAIN");

@@ -25,12 +25,14 @@ function normalise(address) {
  * submission { address, signature } as received, untrusted
  * statement  the exact membership statement, rebuilt from the Crowdlock file
  * today      "YYYY-MM-DD", passed in rather than read from a clock
+ * hrp        address prefix of the Crowdlock's network: "bc" (default), or
+ *            "tb" for a test Crowdlock on testnet4 or signet
  *
  * Returns { ok, status, reason, n, register } — `register` is a new object,
  * never the one passed in, so a refusal cannot leave a half-changed register
  * behind.
  */
-export function addRegistration(register, submission, { statement, today }) {
+export function addRegistration(register, submission, { statement, today, hrp = "bc" }) {
   const no = (status, reason) => ({ ok: false, status, reason });
 
   if (!register || typeof register !== "object" || !Array.isArray(register.members)) {
@@ -51,7 +53,7 @@ export function addRegistration(register, submission, { statement, today }) {
   // The signature is checked before anything else is considered, including
   // whether the address is already a member. An unsigned submission learns
   // nothing about the register.
-  const result = verifyMembership({ address, signature, message: statement });
+  const result = verifyMembership({ address, signature, message: statement, hrp });
   if (!result.valid) {
     return no(400, result.derived
       ? `${result.reason} — this signature belongs to ${result.derived}`

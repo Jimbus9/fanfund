@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "name": "The Kop Fund — TEST (testnet4)",
+  "about": "A test copy of The Kop Fund on Bitcoin's test network, for trying the app with test money. Nothing here is real.",
+  "disclaimer": "TEST ONLY. Test bitcoin has no value. Joining here does not make you a member of The Kop Fund.",
+  "declaration": {
+    "title": "Test Declaration",
+    "version": 1,
+    "file": "crowdlocks/test/declaration-test-v1.txt",
+    "sha256": "29f943a5bf2c110200cb33d0299b00960b19f10f1942d14699aec154b39316df"
+  },
+  "network": "testnet4",
+  "unit": "BTC",
+  "lock_lengths_years": [
+    1,
+    3,
+    5
+  ],
+  "minimum_counted_lock_sats": 10000,
+  "cosigner_keys": [],
+  "gathering_window_max_days": 28,
+  "settlement_window_max_days": 14,
+  "destination_wait_days": 14,
+  "attestor_keys": [],
+  "attestor_threshold": 1,
+  "max_commitment_fee": 0.01,
+  "register": {
+    "registrations": "crowdlocks/test/registrations.json",
+    "destinations": "crowdlocks/test/destinations.json"
+  },
+  "chain_api": "https://mempool.space/testnet4/api",
+  "join_endpoint": "https://kop-fund.jimmyhy29.workers.dev/join/submit?c=kop-fund-testnet4",
+  "lock_endpoint": "https://kop-fund.jimmyhy29.workers.dev/lock/submit?c=kop-fund-testnet4"
+}

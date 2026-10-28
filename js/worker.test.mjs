@@ -238,6 +238,69 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
   }
 }
 
+// --- several Crowdlocks, several networks ----------------------------------
+//
+// A test Crowdlock on testnet4 is served by the same endpoint as The Kop Fund,
+// chosen with ?c=. What must never happen is a test signature landing on the
+// real register, or a real one on the test register.
+{
+  const proven = await import(join(R, "lock", "lock.mjs"));
+  const bitcoinMessage = (await import(join(R, "lock", "node_modules", "bitcoinjs-message", "index.js"))).default;
+  const bitcoin = await import(join(R, "lock", "node_modules", "bitcoinjs-lib", "src", "index.js"));
+  const { membershipStatement } = await import(join(R, "js", "crowdlock.mjs"));
+
+  const test = JSON.parse(readFileSync(join(R, "crowdlocks", "kop-fund-testnet4.json"), "utf8"));
+  const testReg = JSON.parse(readFileSync(join(R, test.register.registrations), "utf8"));
+  const kop = JSON.parse(readFileSync(join(R, "crowdlocks", "kop-fund.json"), "utf8"));
+  const kopReg = JSON.parse(readFileSync(join(R, "registrations.json"), "utf8"));
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
+
+  const signer = proven.ECPair.fromPrivateKey(Buffer.alloc(32, 7));
+  const tbAddress = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(signer.publicKey), network: bitcoin.networks.testnet }).address;
+  const sign = (statement) => bitcoinMessage.sign(statement, Buffer.from(signer.privateKey), true).toString("base64");
+
+  let written = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const u = String(url), get = (init.method ?? "GET") === "GET";
+    if (u.includes("/contents/crowdlocks/kop-fund-testnet4.json")) return Response.json({ content: b64(test), sha: "t" });
+    if (u.includes("/contents/crowdlocks/kop-fund.json")) return Response.json({ content: b64(kop), sha: "k" });
+    if (u.includes("/contents/crowdlocks/nonesuch.json")) return new Response("{}", { status: 404 });
+    if (u.includes(`/contents/${test.register.registrations}`) && get) return Response.json({ content: b64(testReg), sha: "tr" });
+    if (u.includes("/contents/registrations.json") && get) return Response.json({ content: b64(kopReg), sha: "kr" });
+    if (init.method === "PUT") { written.push({ path: u.split("/contents/")[1], body: JSON.parse(init.body) }); return Response.json({}); }
+    return new Response("unexpected " + u, { status: 500 });
+  };
+  const post = (query, body) => worker.default.fetch(new Request(`https://example.com/join/submit${query}`, {
+    method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" },
+  }), { GITHUB_TOKEN: "test" });
+
+  try {
+    const testSig = sign(membershipStatement(test));
+    const ok = await post("?c=kop-fund-testnet4", { address: tbAddress, signature: testSig });
+    const okBody = await ok.json();
+    check("A testnet4 signer joins the test Crowdlock", ok.status === 200 && okBody.n === 1, okBody.error ?? `member ${okBody.n}`);
+    check("…and it is written to the TEST register, nowhere else",
+      written.length === 1 && written[0].path === test.register.registrations, written.map((w) => w.path).join(", "));
+
+    written = [];
+    const wrongPlace = await post("", { address: tbAddress, signature: testSig });
+    check("The same test signature is refused by The Kop Fund", wrongPlace.status === 400 && written.length === 0,
+      (await wrongPlace.json()).error?.slice(0, 50));
+
+    written = [];
+    const realStatementOnTest = await post("?c=kop-fund-testnet4", { address: tbAddress, signature: sign(membershipStatement(kop)) });
+    check("A signature over the REAL declaration is refused by the test Crowdlock", realStatementOnTest.status === 400 && written.length === 0);
+
+    const unknown = await post("?c=nonesuch", { address: tbAddress, signature: testSig });
+    check("An unknown Crowdlock name is a 404, not a crash", unknown.status === 404, String(unknown.status));
+    const sneaky = await post("?c=../registrations", { address: tbAddress, signature: testSig });
+    check("A name that tries to leave the crowdlocks folder is refused", sneaky.status === 400, String(sneaky.status));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log();
 console.log("-".repeat(74));
 console.log(failures === 0

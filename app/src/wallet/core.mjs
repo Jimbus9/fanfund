@@ -8,6 +8,8 @@
 //   addresses         @bitcoinerlab/descriptors  wpkh(...) and addr(...)
 //   transactions      descriptors' Psbt + Output  inputs, outputs, weights
 //   signing           descriptors' signers     sign every input
+//   signing a message @bitcoinerlab/secp256k1  signRecoverable, over the
+//                                              register's own message hash
 //
 // What is ours is only the arithmetic around them (how much fee to leave) and
 // the refusals that stop a transaction destroying somebody's money. This file
@@ -27,6 +29,10 @@
 import { generateMnemonic, validateMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { BIP32, Output, Psbt, signers, networks, keyExpressionBIP32 } from "@bitcoinerlab/descriptors";
+import * as ecc from "@bitcoinerlab/secp256k1";
+// The register's own verifier, shared with the website: the message hash a
+// signature is made over is computed by exactly the code that later checks it.
+import { messageHash } from "../../../js/verify.mjs";
 
 /** Networks the wallet knows, and the coin type each uses in its key path. */
 export const NETWORKS = {
@@ -201,6 +207,34 @@ export async function buildSend({ account, chain, to, amount, feeRate }) {
 }
 
 // ---------------------------------------------------------------------------
+// Signing a Crowdlock's declaration
+// ---------------------------------------------------------------------------
+
+/**
+ * Sign a membership statement with the account's key, as a standard Bitcoin
+ * Signed Message — the same kind Sparrow and Electrum produce, and the kind
+ * member 1's Ledger signature is. Returns the base64 signature.
+ *
+ * The signing itself is the library's (deterministic, low-S, with the recovery
+ * number a signed message carries). Ours is only the standard first byte:
+ * 31 + recovery number, meaning "compressed key".
+ */
+export function signStatement(account, statement) {
+  const node = account.signer().derivePath(account.path);
+  const { signature, recoveryId } = ecc.signRecoverable(messageHash(statement), node.privateKey);
+  const out = new Uint8Array(65);
+  out[0] = 31 + recoveryId;
+  out.set(signature, 1);
+  return toBase64(out);
+}
+
+// ---------------------------------------------------------------------------
+
+function toBase64(bytes) {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
 
 function toHex(bytes) {
   let s = "";
