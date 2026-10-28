@@ -39,6 +39,12 @@ jobs:
         working-directory: app
         run: npm ci
 
+      - name: Install the lock tools' libraries
+        # The app's tests check its signatures against bitcoinjs-message and
+        # its locks against lock/lock.mjs, both installed here.
+        working-directory: lock
+        run: npm ci
+
       - name: Test the key module on a private chain
         working-directory: app/test-chain
         run: |
