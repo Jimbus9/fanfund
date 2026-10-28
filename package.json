@@ -2,5 +2,6 @@
   "name": "fanfund",
   "private": true,
   "type": "module",
-  "description": "The Kop Fund — declaration, register and lock"
+  "description": "The Kop Fund \u2014 declaration, register and lock",
+  "license": "MIT"
 }

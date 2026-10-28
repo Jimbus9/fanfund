@@ -14,5 +14,6 @@
   },
   "overrides": {
     "leveldown": "$leveldown"
-  }
+  },
+  "license": "MIT"
 }
