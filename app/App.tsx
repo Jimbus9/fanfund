@@ -130,8 +130,11 @@ function CheckWords({ words, go }: { words: string; go: Go }) {
 
 function Restore({ go }: { go: Go }) {
   const [text, setText] = useState("");
+  // 12 is what this app makes; 15 to 24 come from other wallets (a Ledger
+  // makes 24). All are standard, so all are accepted.
   const count = tidyWords(text).split(" ").filter(Boolean).length;
-  const valid = count === 12 && wordsAreValid(text);
+  const rightLength = [12, 15, 18, 21, 24].includes(count);
+  const valid = rightLength && wordsAreValid(text);
 
   const finish = async () => {
     const words = tidyWords(text);
@@ -142,13 +145,15 @@ function Restore({ go }: { go: Go }) {
   return (
     <View>
       <Text style={s.h1}>Restore your wallet</Text>
-      <Text style={s.p}>Type your 12 backup words, in order, with spaces between them.</Text>
+      <Text style={s.p}>Type your backup words, in order, with spaces between them. Usually 12 or 24.</Text>
       <TextInput
         style={[s.input, { minHeight: 120, textAlignVertical: "top" }]} multiline
         autoCapitalize="none" autoCorrect={false} value={text} onChangeText={setText}
       />
       <Text style={valid ? s.good : s.note}>
-        {valid ? "Those words are valid." : count === 12 ? "12 words, but they don't check out — look for a misspelt word." : `${count} of 12 words`}
+        {valid ? "Those words are valid."
+          : rightLength ? `${count} words, but they don't check out — look for a misspelt word.`
+          : `${count} words so far`}
       </Text>
       <Button label="Restore" disabled={!valid} onPress={finish} />
       <Button label="Back" kind="plain" onPress={() => go({ name: "welcome" })} />

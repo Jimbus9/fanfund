@@ -43,6 +43,13 @@ const broken = Array(12).fill("abandon").join(" ");
 check("Words with one changed fail the checksum", !wordsAreValid(broken));
 check("Messy typing is tidied (capitals, extra spaces)", tidyWords(`  ${words.toUpperCase().replace(/ /g, "   ")} `) === words);
 
+// Wallets made elsewhere — a Ledger makes 24 words — must restore too.
+const { generateMnemonic } = await import("../node_modules/@scure/bip39/index.js");
+const { wordlist } = await import("../node_modules/@scure/bip39/wordlists/english.js");
+const twentyFour = generateMnemonic(wordlist, 256);
+check("24 backup words from another wallet are accepted", wordsAreValid(twentyFour) && twentyFour.split(" ").length === 24);
+check("…and open a wallet", accountFromWords(twentyFour, "mainnet").address.startsWith("bc1q"));
+
 // The published standard test vector (BIP84): these words must give this
 // address in every wallet that follows the standard — including ours, or a fan
 // could not take their words to Sparrow and find their money.
