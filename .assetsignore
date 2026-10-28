@@ -23,3 +23,7 @@ CLAUDE.md
 # which is where anybody reading the code should read it.
 js/*.test.mjs
 lock/
+
+# The phone app and its build setup are source code, not part of the website.
+app/
+.github/

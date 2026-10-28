@@ -1,0 +1,9 @@
+{
+  "name": "wallet-test-chain",
+  "private": true,
+  "type": "module",
+  "description": "The app's key module, tested on a private bcoin regtest chain. Kept apart so bcoin never enters the app.",
+  "scripts": { "test": "NODE_BACKEND=js node wallet.test.mjs" },
+  "dependencies": { "bcoin": "1.0.2", "leveldown": "file:./leveldown-stub" },
+  "overrides": { "leveldown": "$leveldown" }
+}

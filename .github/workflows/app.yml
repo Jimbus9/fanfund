@@ -1,0 +1,65 @@
+# Builds the Crowdlock app for Android whenever the app changes, and publishes
+# the installable file (APK) as the "app-test" release, where it can be
+# downloaded straight onto a phone.
+#
+# It runs the key module's chain test first. A build whose wallet code fails
+# its test is never published.
+#
+# The APK is signed with Expo's standard development key. That is fine for
+# testing on our own phones with test money, and it is NOT how a real release
+# will be signed — that comes at milestone 7, with its own key.
+
+name: App
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/app.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to publish the release with the APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install the app's libraries
+        working-directory: app
+        run: npm ci
+
+      - name: Test the key module on a private chain
+        working-directory: app/test-chain
+        run: |
+          npm ci --ignore-scripts
+          npm test
+
+      - name: Generate the Android project
+        working-directory: app
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build the APK
+        working-directory: app/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Publish it as the app-test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/android/app/build/outputs/apk/release/app-release.apk crowdlock-test.apk
+          gh release delete app-test --yes --cleanup-tag || true
+          gh release create app-test crowdlock-test.apk \
+            --title "Crowdlock app — test build" \
+            --notes "Test money only (testnet4). Built from ${GITHUB_SHA::7}. Install on Android by opening this file on the phone." \
+            --prerelease
