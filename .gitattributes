@@ -1,0 +1,6 @@
+# The declaration is identified by the sha256 of its exact bytes, so git must
+# never rewrite its line endings on checkout (core.autocrlf on Windows would).
+spec/declaration-v1.txt -text
+
+# Timestamp proofs are binary.
+*.ots binary
