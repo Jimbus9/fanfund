@@ -158,6 +158,86 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
   }
 }
 
+// --- two people at once -----------------------------------------------------
+//
+// Every write quotes the version it read, so GitHub refuses it if the register
+// changed meanwhile. That is correct, and it is why two people joining at the
+// same moment cannot overwrite each other. The question is what the second
+// person is then told. Until now: "the register could not be written just
+// now" — sent away because somebody else joined in the same minute.
+//
+// Now the conflict is retried, and the decision is made AGAIN from scratch
+// against the newly read register rather than replayed. That distinction is
+// the whole of it: if the fresh register already holds this address, the
+// duplicate check has to see it, or a retry would write a member twice.
+{
+  const kop = JSON.parse(readFileSync(join(R, "crowdlocks", "kop-fund.json"), "utf8"));
+  const MEMBER = {
+    address: "bc1qx22lej8slm4g6f5l85tte0peraha7km30lqxw7",
+    signature: "H7yCAMd+09Ap+GnsO7chcHd9ILDdBvMBruTeHF6WPyBHTUH6e2dJlaGi3nRGuaEtYvC9258+LzM1Y9kLmJpsD5I=",
+  };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
+  const emptyRegister = () => ({ declaration: { sha256: kop.declaration.sha256 }, members: [], locks: [] });
+
+  const realFetch = globalThis.fetch;
+
+  /** GitHub that refuses the first `conflicts` writes, as if somebody else wrote first. */
+  const stub = (conflicts, registerAt) => {
+    let puts = 0, reads = 0;
+    const state = { puts: () => puts, written: null, reads: () => reads };
+    globalThis.fetch = async (url, init = {}) => {
+      const u = String(url);
+      if (u.includes("/contents/crowdlocks/")) return Response.json({ content: b64(kop), sha: "c" });
+      if (u.includes("/contents/registrations.json") && (init.method ?? "GET") === "GET") {
+        return Response.json({ content: b64(registerAt(reads++)), sha: `r${reads}` });
+      }
+      if (u.includes("/contents/registrations.json") && init.method === "PUT") {
+        puts++;
+        if (puts <= conflicts) return new Response("conflict", { status: 409 });
+        state.written = JSON.parse(init.body);
+        return Response.json({});
+      }
+      return new Response("unexpected " + u, { status: 500 });
+    };
+    return state;
+  };
+
+  const submit = () => worker.default.fetch(new Request("https://example.com/join/submit", {
+    method: "POST", body: JSON.stringify(MEMBER), headers: { "content-type": "application/json" },
+  }), { GITHUB_TOKEN: "test" });
+
+  try {
+    // One collision, then the register is still empty: the join succeeds.
+    let s = stub(1, () => emptyRegister());
+    let res = await submit();
+    check("A write conflict is retried rather than reported", res.status === 200, String(res.status));
+    check("…and it really did take a second attempt", s.puts() === 2, `${s.puts()} write(s)`);
+    check("…and the register was re-read before deciding again", s.reads() === 2, `${s.reads()} read(s)`);
+    const writtenRegister = JSON.parse(Buffer.from(s.written.content, "base64").toString());
+    check("…and exactly one member was written, not two", writtenRegister.members.length === 1,
+      `${writtenRegister.members.length} member(s)`);
+
+    // The collision was the SAME person being added by another route. The
+    // retry must refuse as a duplicate, not write them in twice.
+    s = stub(1, (n) => (n === 0 ? emptyRegister()
+      : { ...emptyRegister(), members: [{ n: 1, ...MEMBER, signed: "2026-10-27" }] }));
+    res = await submit();
+    check("A retry decides again, so a duplicate is caught the second time around",
+      res.status === 409, String(res.status));
+    check("…and nothing was written", s.written === null);
+
+    // Collisions all the way down stop rather than looping.
+    s = stub(99, () => emptyRegister());
+    res = await submit();
+    check("Endless collisions give up instead of looping", res.status === 503, String(res.status));
+    check("…after a bounded number of attempts", s.puts() === 3, `${s.puts()} write(s)`);
+    check("…and still name the route that needs nobody",
+      (await res.clone().json()).alternative?.includes("pull request"));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log();
 console.log("-".repeat(74));
 console.log(failures === 0

@@ -159,6 +159,24 @@ some address until the lock is spent. Nobody can find a lock by looking. Its
 owner publishes the terms, and anybody can then check them with the four steps
 above.
 
+**Publishing a lock needs no signature, and that is deliberate.** Joining the
+register does need one, because a registration asserts *agreement* — that a
+particular person read the declaration and accepted it — and only a signature
+can establish that. A lock asserts something different: that an address is a
+lock with these terms, belonging to this member. Every part of that is a fact
+about the chain and some arithmetic, and anybody can check it for themselves
+without anybody's permission. A signature would prove consent to publish, not
+truth, and this register deals in the second.
+
+The consequence should be stated rather than discovered. **A member cannot
+keep a funded lock private.** Once their owner key is known — which it is from
+the moment their first lock is published — anybody who guesses the date can
+derive the address, see the coins on the chain, and publish the lock for them.
+Nothing is stolen and no figure is inflated, because the coins are the
+member's own and were always going to be counted. What is lost is the choice
+of *when* a lock becomes public. Somebody who minds should lock later rather
+than earlier, not expect the register to keep their secret.
+
 A lock on the register is a record of exactly these fields:
 
 | Field | What it is |

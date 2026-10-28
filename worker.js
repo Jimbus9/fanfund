@@ -61,7 +61,11 @@ async function gh(token, path, init = {}) {
       ...(init.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`github ${path}: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`github ${path}: ${res.status}`);
+    err.status = res.status;   // 409/422 here means somebody else wrote first
+    throw err;
+  }
   return res.json();
 }
 
@@ -81,6 +85,70 @@ function toBase64(text) {
   return btoa(bin);
 }
 
+
+/**
+ * Read the register, decide what it should become, and write it back —
+ * retrying if somebody else wrote in between.
+ *
+ * Every write quotes the blob sha it read, so GitHub refuses it outright if
+ * the register changed meanwhile. That is the correct behaviour and it is why
+ * two people joining at once cannot overwrite each other. What was missing is
+ * what happens next: the second person was told the register "could not be
+ * written just now" and sent away, for no better reason than that somebody
+ * else joined in the same minute. On a busy day that is most of them.
+ *
+ * So a conflict is retried rather than reported. The decision is made again
+ * from scratch against the newly read register, never merged or replayed —
+ * because the fresh register may now hold the very address being submitted,
+ * and the duplicate check has to see it.
+ *
+ * `decide(register, crowdlock)` returns either a refusal { ok: false, status,
+ * reason } or { ok: true, register, commitMessage, reply, writeFailure }.
+ */
+async function updateRegister(token, decide, alternative) {
+  const ATTEMPTS = 3;
+  let lastWriteFailure = "the register could not be written just now";
+
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    let crowdlock, register, sha;
+    try {
+      crowdlock = JSON.parse((await readFile(token, CROWDLOCK)).text);
+      const current = await readFile(token, REGISTER);
+      register = JSON.parse(current.text);
+      sha = current.sha;
+    } catch {
+      return json(502, { error: "could not read the register just now — nothing was changed", alternative });
+    }
+
+    const outcome = await decide(register, crowdlock);
+    if (!outcome.ok) return json(outcome.status, { error: outcome.reason });
+    lastWriteFailure = outcome.writeFailure ?? lastWriteFailure;
+
+    try {
+      await gh(token, `contents/${REGISTER}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          message: outcome.commitMessage,
+          content: toBase64(JSON.stringify(outcome.register, null, 2) + "\n"),
+          sha,      // refuses the write if the register changed in the meantime
+          branch: BRANCH,
+        }),
+      });
+    } catch (e) {
+      const somebodyElseWroteFirst = e?.status === 409 || e?.status === 422;
+      if (!somebodyElseWroteFirst) return json(502, { error: lastWriteFailure, alternative });
+      if (attempt < ATTEMPTS) continue;
+      // Three collisions in a row is no longer a coincidence. 503 rather than
+      // 502, because this one really is worth trying again in a moment.
+      return json(503, { error: `${lastWriteFailure} — the register is busy, try again in a moment`, alternative });
+    }
+
+    return json(200, outcome.reply);
+  }
+
+  return json(502, { error: lastWriteFailure, alternative });  // unreachable
+}
+
 async function join(request, env) {
   const token = env.GITHUB_TOKEN;
   if (!token) {
@@ -97,58 +165,35 @@ async function join(request, env) {
     return json(400, { error: "that was not JSON" });
   }
 
-  let crowdlock, register, sha;
-  try {
-    crowdlock = JSON.parse((await readFile(token, CROWDLOCK)).text);
-    const current = await readFile(token, REGISTER);
-    register = JSON.parse(current.text);
-    sha = current.sha;
-  } catch {
-    return json(502, {
-      error: "could not read the register just now — nothing was changed",
-      alternative: `open a pull request adding your record to ${REGISTER}`,
+  return updateRegister(token, (register, crowdlock) => {
+    // Rebuilt from the Crowdlock's own file on every request, never taken from
+    // the submission and never written in here. If the declaration ever
+    // changed, this would start verifying against the new one with no redeploy.
+    const statement = membershipStatement(crowdlock);
+
+    if (register.declaration?.sha256 !== crowdlock.declaration.sha256) {
+      return { ok: false, status: 500,
+        reason: "the register and the Crowdlock disagree about the declaration; refusing to write" };
+    }
+
+    const outcome = addRegistration(register, submission, {
+      statement,
+      today: new Date().toISOString().slice(0, 10),
     });
-  }
+    if (!outcome.ok) return outcome;
 
-  // Rebuilt from the Crowdlock's own file on every request, never taken from
-  // the submission and never written in here. If the declaration ever
-  // changed, this would start verifying against the new one with no redeploy.
-  const statement = membershipStatement(crowdlock);
-
-  if (register.declaration?.sha256 !== crowdlock.declaration.sha256) {
-    return json(500, {
-      error: "the register and the Crowdlock disagree about the declaration; refusing to write",
-    });
-  }
-
-  const outcome = addRegistration(register, submission, {
-    statement,
-    today: new Date().toISOString().slice(0, 10),
-  });
-  if (!outcome.ok) return json(outcome.status, { error: outcome.reason });
-
-  try {
-    await gh(token, `contents/${REGISTER}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        message: `Member ${outcome.n}`,
-        content: toBase64(JSON.stringify(outcome.register, null, 2) + "\n"),
-        sha,        // refuses the write if the register changed in the meantime
-        branch: BRANCH,
-      }),
-    });
-  } catch {
-    return json(502, {
-      error: "your signature is valid but the register could not be written just now",
-      alternative: `open a pull request adding your record to ${REGISTER}`,
-    });
-  }
-
-  return json(200, {
-    ok: true,
-    n: outcome.n,
-    message: `You are member ${outcome.n}. The register will show you within a minute.`,
-  });
+    return {
+      ok: true,
+      register: outcome.register,
+      commitMessage: `Member ${outcome.n}`,
+      writeFailure: "your signature is valid but the register could not be written just now",
+      reply: {
+        ok: true,
+        n: outcome.n,
+        message: `You are member ${outcome.n}. The register will show you within a minute.`,
+      },
+    };
+  }, `open a pull request adding your record to ${REGISTER}`);
 }
 
 // POST /lock/submit — the same shape as joining, for a lock.
@@ -172,59 +217,48 @@ async function submitLock(request, env) {
     return json(400, { error: "that was not JSON" });
   }
 
-  let crowdlock, register, sha;
-  try {
-    crowdlock = JSON.parse((await readFile(token, CROWDLOCK)).text);
-    const current = await readFile(token, REGISTER);
-    register = JSON.parse(current.text);
-    sha = current.sha;
-  } catch {
-    return json(502, { error: "could not read the register just now — nothing was changed", alternative });
-  }
-
-  const prepared = prepareLock(submission, {
-    crowdlock, register, now: Math.floor(Date.now() / 1000),
-  });
-  if (!prepared.ok) return json(prepared.status, { error: prepared.reason });
-
-  // The one fact taken from outside: confirmed coins at the address, read from
-  // the chain source the Crowdlock itself names.
-  let confirmedSats;
-  try {
-    const res = await fetch(`${crowdlock.chain_api}/address/${prepared.lock.address}`);
-    if (!res.ok) throw new Error(String(res.status));
-    const s = (await res.json()).chain_stats;
-    confirmedSats = s.funded_txo_sum - s.spent_txo_sum;
-  } catch {
-    return json(502, { error: "could not read the blockchain just now — nothing was changed", alternative });
-  }
-
-  const outcome = addLock(register, prepared.lock, {
-    confirmedSats, today: new Date().toISOString().slice(0, 10),
-  });
-  if (!outcome.ok) return json(outcome.status, { error: outcome.reason });
-
-  const n = register.members.find((m) => m.address === prepared.lock.member)?.n;
-  try {
-    await gh(token, `contents/${REGISTER}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        message: `Lock for member ${n}`,
-        content: toBase64(JSON.stringify(outcome.register, null, 2) + "\n"),
-        sha,        // refuses the write if the register changed in the meantime
-        branch: BRANCH,
-      }),
+  return updateRegister(token, async (register, crowdlock) => {
+    const prepared = prepareLock(submission, {
+      crowdlock, register, now: Math.floor(Date.now() / 1000),
     });
-  } catch {
-    return json(502, { error: "your lock is genuine but the register could not be written just now", alternative });
-  }
+    if (!prepared.ok) return prepared;
 
-  return json(200, {
-    ok: true,
-    address: prepared.lock.address,
-    unlocks: prepared.lock.unlocks,
-    message: "Your lock is on the register. It will appear within a minute.",
-  });
+    // The one fact taken from outside: confirmed coins at the address, read
+    // from the chain source the Crowdlock itself names.
+    let confirmedSats;
+    try {
+      const res = await fetch(`${crowdlock.chain_api}/address/${prepared.lock.address}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const s = (await res.json()).chain_stats;
+      confirmedSats = s.funded_txo_sum - s.spent_txo_sum;
+    } catch {
+      return { ok: false, status: 502, reason: "could not read the blockchain just now — nothing was changed" };
+    }
+
+    const outcome = addLock(register, prepared.lock, {
+      confirmedSats, today: new Date().toISOString().slice(0, 10),
+    });
+    if (!outcome.ok) return outcome;
+
+    // Bech32 is case-insensitive, so the member's number is looked up the way
+    // addresses are compared everywhere else here. Comparing raw would leave
+    // a commit message reading "Lock for member undefined".
+    const same = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+    const n = register.members.find((m) => same(m.address, prepared.lock.member))?.n;
+
+    return {
+      ok: true,
+      register: outcome.register,
+      commitMessage: `Lock for member ${n}`,
+      writeFailure: "your lock is genuine but the register could not be written just now",
+      reply: {
+        ok: true,
+        address: prepared.lock.address,
+        unlocks: prepared.lock.unlocks,
+        message: "Your lock is on the register. It will appear within a minute.",
+      },
+    };
+  }, alternative);
 }
 
 export default {
