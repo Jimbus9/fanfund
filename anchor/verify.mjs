@@ -12,7 +12,10 @@
 //   2. Is it in the blockchain yet?  This needs to look at Bitcoin. A fresh
 //      proof points at the calendar servers; a finished one points at a block.
 //      If it is still waiting, this asks the calendars whether they are ready
-//      and writes the upgraded proof back.
+//      and writes the completed proof back. (OpenTimestamps calls this step
+//      "upgrading", which sounds like installing a newer version of
+//      something. It is not. It is collecting the missing half of a proof.
+//      That word is kept out of what this prints.)
 //
 // A proof that fails the first question is worthless and should be deleted.
 // A proof that passes the first and not the second is simply young.
@@ -119,11 +122,11 @@ line("Asking them whether they are ready…");
 line();
 
 try {
-  const upgraded = await OTS.upgrade(detached);
-  if (upgraded) {
+  const collected = await OTS.upgrade(detached);
+  if (collected) {
     writeFileSync(proofPath, Buffer.from(detached.serializeToBytes()));
     rule();
-    line("UPGRADED. The proof now points at the blockchain itself.");
+    line("COMPLETE. The proof now points at the blockchain itself.");
     rule();
     line();
     line(OTS.info(detached).trim().split("\n").map((l) => "  " + l).join("\n"));

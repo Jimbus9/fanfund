@@ -52,9 +52,16 @@ thing it was made for.
 
 ## Finishing it
 
-A fresh proof is real but incomplete: the calendars have the fingerprint and
-need a few hours to get it into a block. Until then the proof points at the
-calendars rather than at the chain.
+A fresh proof is real but only half written. The calendars have the
+fingerprint and need an hour or two to get it into a block — and the `.ots`
+file does not update itself when they do. It is a snapshot of what was known
+at the moment of stamping, which was "the calendars have it, the block has not
+happened yet". That sentence stays frozen in the file until somebody goes back
+and asks.
+
+Going back and asking is the whole of the next step. OpenTimestamps calls it
+"upgrading", which sounds like installing a newer version of something; it is
+nothing of the kind, and the word is kept out of this project's own output.
 
 ```
 node anchor/verify.mjs          the next day
