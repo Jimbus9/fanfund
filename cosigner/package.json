@@ -1,0 +1,15 @@
+{
+  "name": "kop-fund-cosigner",
+  "private": true,
+  "type": "module",
+  "description": "Generating and restoring the co-signer key, on a machine that never goes online again",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "restore": "node restore.mjs"
+  },
+  "dependencies": {
+    "@scure/bip32": "1.6.2",
+    "@scure/bip39": "1.5.4"
+  },
+  "license": "MIT"
+}

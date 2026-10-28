@@ -1,2 +1,3 @@
 node_modules/
 lock-state.json
+cosigner/cosigner-pubkey.txt
