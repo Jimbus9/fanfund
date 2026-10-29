@@ -90,11 +90,12 @@ console.log("-".repeat(80));
 const now = 1800000000;
 const fakeLoaded = {
   crowdlock: { chain_api: "https://chain.example", minimum_counted_lock_sats: 10000 },
-  register: { members: [{ n: 1 }, { n: 2 }], locks: [
-    { address: "tb1qcounts", locktime: now + 1000 },
-    { address: "tb1qtoosmall", locktime: now + 1000 },
-    { address: "tb1qlapsed", locktime: now - 1 },
-    { address: "TB1QCOUNTS", locktime: now + 1000 },
+  // Three signed; only member one holds a lock that counts.
+  register: { members: [{ n: 1, address: "tb1qone" }, { n: 2, address: "tb1qtwo" }, { n: 3, address: "tb1qthree" }], locks: [
+    { address: "tb1qcounts", member: "tb1qone", locktime: now + 1000 },
+    { address: "tb1qtoosmall", member: "tb1qtwo", locktime: now + 1000 },
+    { address: "tb1qlapsed", member: "tb1qtwo", locktime: now - 1 },
+    { address: "TB1QCOUNTS", member: "tb1qone", locktime: now + 1000 },
   ] },
 };
 const chainFetch = async (url) => {
@@ -107,7 +108,8 @@ const chainFetch = async (url) => {
 const totals = await committedTotal(fakeLoaded, chainFetch, now);
 check("The committed total counts only confirmed, in-date, above-minimum locks, once each",
   totals.sats === 50000n && totals.locks === 1, `${totals.sats} sats in ${totals.locks} lock(s)`);
-check("…and the member count is everyone who signed", totals.members === 2);
+check("…and the only people it counts are committed members, never signatures",
+  totals.members === 1, `${totals.members} committed of 3 signed`);
 
 let posted = null;
 const endpointFetch = async (url, init) => { posted = { url, body: JSON.parse(init.body) }; return Response.json({ ok: true, n: 7 }); };

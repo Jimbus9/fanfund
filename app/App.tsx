@@ -302,9 +302,18 @@ async function allLinks(): Promise<string[]> {
 
 function CrowdlockList({ words, address, go }: { words: string; address: string; go: Go }) {
   const [items, setItems] = useState<Loaded[] | null>(null);
+  const [totals, setTotals] = useState<Record<string, { sats: bigint; members: number }>>({});
   useEffect(() => {
     let live = true;
-    allLinks().then((links) => Promise.all(links.map((u) => loadCrowdlock(u)))).then((r) => { if (live) setItems(r); });
+    allLinks().then((links) => Promise.all(links.map((u) => loadCrowdlock(u)))).then((r) => {
+      if (!live) return;
+      setItems(r);
+      for (const c of r) {
+        if (c.ok && c.crowdlock.network === NETWORK) {
+          committedTotal(c).then((t) => { if (live) setTotals((old) => ({ ...old, [c.url]: t })); }).catch(() => {});
+        }
+      }
+    });
     return () => { live = false; };
   }, []);
 
@@ -320,7 +329,9 @@ function CrowdlockList({ words, address, go }: { words: string; address: string;
         return (
           <Pressable key={c.url} style={s.card} onPress={() => go({ name: "crowdlock", words, url: c.url })}>
             <Text style={s.cardTitle}>{c.crowdlock.name}</Text>
-            <Text style={s.note}>{(c.register.members ?? []).length} signed · {(c.register.locks ?? []).length} locks</Text>
+            <Text style={s.note}>{totals[c.url]
+              ? `${btc(totals[c.url].sats)} locked · ${totals[c.url].members} committed member${totals[c.url].members === 1 ? "" : "s"}`
+              : "Counting what is locked…"}</Text>
             <Text style={m ? s.good : s.link}>{m ? `You are member ${m.n}` : "Read the declaration and join →"}</Text>
           </Pressable>
         );
@@ -384,7 +395,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
 
       <View style={s.panel}>
         <Text style={s.big}>{total ? btc(total.sats) : "…"}</Text>
-        <Text style={s.note}>locked and counted{total ? ` · ${total.locks} lock${total.locks === 1 ? "" : "s"}` : ""} · {(c.register.members ?? []).length} signed</Text>
+        <Text style={s.note}>locked and counted{total ? ` · ${total.members} committed member${total.members === 1 ? "" : "s"}` : ""}</Text>
         <Text style={s.good}>Checked on this phone: the declaration matches its fingerprint and the register agrees.</Text>
       </View>
 

@@ -105,11 +105,17 @@ export function membershipOf(register, address) {
  * The committed total, by the counting rule: confirmed coins at every lock
  * whose date is still ahead and which meets the minimum. Read from the
  * Crowdlock's own chain source, never from anything the register claims.
+ *
+ * The only count of people it gives is committed members: members holding at
+ * least one lock that counts. A count of signatures is never shown, because a
+ * signature costs nothing to make; anyone who wants that number can count the
+ * published register.
  */
 export async function committedTotal(loaded, fetchImpl = globalThis.fetch, now = Math.floor(Date.now() / 1000)) {
   const { crowdlock, register } = loaded;
   const chain = esploraChain(crowdlock.chain_api, fetchImpl);
   const seen = new Set();
+  const committed = new Set();
   let sats = 0n, counted = 0;
   for (const lock of register.locks ?? []) {
     const address = String(lock.address).toLowerCase();
@@ -117,9 +123,12 @@ export async function committedTotal(loaded, fetchImpl = globalThis.fetch, now =
     seen.add(address);
     const coins = (await chain.utxos(lock.address)).filter((c) => c.confirmed);
     const total = coins.reduce((s, c) => s + BigInt(c.value), 0n);
-    if (total >= BigInt(crowdlock.minimum_counted_lock_sats)) { sats += total; counted++; }
+    if (total >= BigInt(crowdlock.minimum_counted_lock_sats)) {
+      sats += total; counted++;
+      if (lock.member) committed.add(String(lock.member).toLowerCase());
+    }
   }
-  return { sats, locks: counted, members: (register.members ?? []).length };
+  return { sats, locks: counted, members: committed.size };
 }
 
 /**
