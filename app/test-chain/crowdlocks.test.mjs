@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
-import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST } from "../src/crowdlocks.mjs";
+import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL } from "../src/crowdlocks.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SITE = "https://jimbus9.github.io/fanfund/";
@@ -120,6 +120,13 @@ const noEndpoint = await submitJoin({}, { address: "tb1qme", signature: "sig" },
 check("With no endpoint, it says to use a pull request instead", !noEndpoint.ok && noEndpoint.error.includes("pull request"));
 const down = await submitJoin({ join_endpoint: "https://x" }, { address: "a", signature: "s" }, async () => { throw new Error("offline"); });
 check("If the register can't be reached, it says the signature is fine", !down.ok && down.error.includes("signature is fine"));
+
+check("The minimum is written plainly", shortBtc(200000) === "0.002 BTC" && shortBtc(10000) === "0.0001 BTC" && shortBtc(100000000) === "1 BTC");
+const priceFetch = async (url) => (url === "https://mempool.space/api/v1/prices" ? Response.json({ USD: 60000, GBP: 46000 }) : new Response("", { status: 404 }));
+check("Real bitcoin gets a rough pound figure", (await poundsPerBtc({ network: "mainnet", chain_api: "https://mempool.space/api" }, priceFetch)) === 46000);
+check("Test bitcoin gets none, because it has no value", (await poundsPerBtc({ network: "testnet4", chain_api: "x" }, priceFetch)) === null);
+check("No price source means no pound figure, not a wrong one", (await poundsPerBtc({ network: "mainnet", chain_api: "https://down" }, async () => { throw new Error("offline"); })) === null);
+check("The link points at the counting rule's section on the minimum", COUNTING_RULE_URL.endsWith("counting-rule.md#the-minimum"));
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The app's Crowdlock loader accepts the real files and refuses doctored ones." : `${failures} check(s) failed.`);

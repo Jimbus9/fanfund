@@ -132,6 +132,34 @@ export async function committedTotal(loaded, fetchImpl = globalThis.fetch, now =
 }
 
 /**
+ * The Crowdlock counting rule, where it explains the minimum. The rule is one
+ * of the method's general documents, the same for every Crowdlock; only the
+ * minimum's size is each Crowdlock's own (minimum_counted_lock_sats).
+ */
+export const COUNTING_RULE_URL = "https://github.com/Jimbus9/fanfund/blob/main/spec/counting-rule.md#the-minimum";
+
+/**
+ * Pounds per bitcoin right now, for an indicative figure only — never a
+ * headline, never stored. Real bitcoin only: test coins have no value.
+ * Returns a number, or null if there is no honest figure to give.
+ */
+export async function poundsPerBtc(crowdlock, fetchImpl = globalThis.fetch) {
+  if (crowdlock.network !== "mainnet") return null;
+  try {
+    const r = await fetchImpl(`${crowdlock.chain_api}/v1/prices`, { cache: "no-store" });
+    const gbp = (await r.json()).GBP;
+    return typeof gbp === "number" && gbp > 0 ? gbp : null;
+  } catch { return null; }
+}
+
+/** "0.002 BTC" — a minimum written without the trailing zeros. */
+export function shortBtc(sats) {
+  const v = BigInt(sats);
+  const frac = (v % 100000000n).toString().padStart(8, "0").replace(/0+$/, "");
+  return `${v / 100000000n}${frac ? "." + frac : ""} BTC`;
+}
+
+/**
  * Send a signed registration to the Crowdlock's join endpoint.
  * Returns { ok: true, n } or { ok: false, error }.
  */

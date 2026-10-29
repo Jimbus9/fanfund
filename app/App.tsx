@@ -12,7 +12,7 @@
 // through src/wallet/core.mjs, and nothing else may.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -21,7 +21,7 @@ import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
 import { newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement } from "./src/wallet/core.mjs";
 // @ts-ignore — plain module shared with the chain tests
-import { STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin } from "./src/crowdlocks.mjs";
+import { STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc } from "./src/crowdlocks.mjs";
 import { loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks } from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
@@ -357,13 +357,17 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
   const [c, setC] = useState<Loaded | null>(null);
   const [total, setTotal] = useState<{ sats: bigint; locks: number; members: number } | null>(null);
   const [showText, setShowText] = useState(false);
+  const [gbp, setGbp] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const loaded: Loaded = await loadCrowdlock(url);
     setC(loaded);
-    if (loaded.ok) committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
+    if (loaded.ok) {
+      committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
+      poundsPerBtc(loaded.crowdlock).then(setGbp);
+    }
   }, [url]);
   useEffect(() => { load(); }, [load]);
 
@@ -398,6 +402,19 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
         <Text style={s.note}>locked and counted{total ? ` · ${total.members} committed member${total.members === 1 ? "" : "s"}` : ""}</Text>
         <Text style={s.good}>Checked on this phone: the declaration matches its fingerprint and the register agrees.</Text>
       </View>
+
+      {/* Milestone 3 puts the fan's progress here: their waiting balance against
+          THIS Crowdlock's minimum, turning into the lock button once past it.
+          Here, not on Home — the waiting balance belongs to no Crowdlock until
+          the fan chooses one (James, 29 October). */}
+      <Text style={s.p}>
+        A lock counts from <Text style={{ fontWeight: "700" }}>{shortBtc(c.crowdlock.minimum_counted_lock_sats)}</Text>
+        {gbp ? ` (about £${Math.round(Number(c.crowdlock.minimum_counted_lock_sats) / 1e8 * gbp)} today)` : ""}.
+        {" "}A smaller lock is still yours and still locked — it just isn't added to the total.
+      </Text>
+      <Pressable onPress={() => Linking.openURL(COUNTING_RULE_URL)}>
+        <Text style={s.link}>Why there is a minimum →</Text>
+      </Pressable>
 
       <Text style={s.h2}>The declaration</Text>
       {showText
