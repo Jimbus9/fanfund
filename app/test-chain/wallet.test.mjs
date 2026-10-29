@@ -4,6 +4,9 @@
 //   npm install --ignore-scripts      (once)
 //   npm test
 //
+// Milestone 3 adds locking: a lock is made, counted as locked, refused on the
+// way home before its date, and taken home after it.
+//
 // Milestone 1 of the app plan is done when a wallet can be created, funded,
 // deleted, restored from its 12 words with the same address and balance, and
 // can send its waiting money out. Everything here does that against a real
@@ -14,8 +17,9 @@
 import { createRequire } from "node:module";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, NETWORKS, DUST_SATS,
-  signStatement,
+  signStatement, lockFor, lockDate, buildLock, lockState, takeHome,
 } from "../src/wallet/core.mjs";
+import { lockAddress } from "../../js/lockrecord.mjs";
 import { verifyMembership } from "../../js/verify.mjs";
 import bitcoinMessage from "../../lock/node_modules/bitcoinjs-message/index.js";
 
@@ -117,6 +121,10 @@ const chain = {
   },
   async txHex(txid) { return (await node.getMeta(bcoin.util.revHex(txid))).tx.toRaw().toString("hex"); },
   async broadcast(hex) { await node.mempool.addTX(bcoin.TX.fromRaw(Buffer.from(hex, "hex"))); },
+  async everFunded(address) {
+    return (await node.getMetaByAddress([bcoin.Address.fromString(address, "regtest")])).length > 0;
+  },
+  async medianTime() { return (await rpc("getblockchaininfo")).mediantime; },
 };
 
 const minerWords = newWords();
@@ -193,10 +201,69 @@ await refuses("A silly fee rate",
 await refuses("Words that are not valid backup words",
   () => accountFromWords(broken, net), "not valid backup words");
 
+// ---------------------------------------------------------------------------
+rule("MILESTONE 3: LOCK, WATCH IT, TAKE IT HOME");
+
+const saver = accountFromWords(newWords(), net);
+const cosigner = accountFromWords(newWords(), net);
+const toSaver = await buildSend({ account: miner, chain, to: saver.address, amount: 300_000n, feeRate: 2 });
+await chain.broadcast(toSaver.hex);
+await rpc("generatetoaddress", [1, miner.address]);
+
+check("A one-year lock unlocks on a plain date, a year or so away",
+  lockDate(1, 1800000000) % 86400 === 0 && lockDate(1, 1800000000) - 1800000000 >= 365 * 86400);
+check("A test length under a day is not rounded", lockDate(1 / 8766, 1800000000) === 1800000000 + Math.ceil(3600));
+
+await refuses("A lock whose co-signer is the fan's own key",
+  async () => lockFor({ account: saver, cosignerPubkey: saver.publicKey, locktime: 1900000000 }), "your own key");
+await refuses("A lock whose date is a block height",
+  async () => lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: 800000 }), "must be a date");
+
+const T = (await chain.medianTime()) + 2 * 86400;
+const lock = lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: T });
+const registerSays = lockAddress({ ownerPubkey: saver.publicKey, cosignerPubkey: cosigner.publicKey, locktime: T }, "rb");
+check("The app's lock address is the one the register rebuilds", lock.address === registerSays, lock.address.slice(0, 18) + "…");
+
+const stateOf = async () => lockState({ chain, lock, medianTime: await chain.medianTime() });
+check("Before anything is sent, the lock is empty", (await stateOf()).state === "empty");
+
+await refuses("Locking to terms that do not make the address",
+  () => buildLock({ account: saver, chain, lock: { ...lock, locktime: T + 1 }, feeRate: 2 }), "do not make that address");
+const locking = await buildLock({ account: saver, chain, lock, feeRate: 2 });
+await chain.broadcast(locking.hex);
+check("Locking sends everything waiting into the lock", (await stateOf()).state === "arriving",
+  `${locking.sent} sats, fee ${locking.fee}`);
+await rpc("generatetoaddress", [1, miner.address]);
+let st = await stateOf();
+check("Once confirmed it shows as locked", st.state === "locked" && st.confirmed === locking.sent, `${st.confirmed} sats`);
+check("…and the waiting balance is empty", (await waitingBalance(chain, saver.address)).total === 0n);
+
+const mt = await chain.medianTime();
+await refuses("Taking it home before the date: the app refuses",
+  () => takeHome({ account: saver, chain, lock, feeRate: 2, medianTime: mt }), "not passed yet");
+const early = await takeHome({ account: saver, chain, lock, feeRate: 2, medianTime: mt, ignoreDate: true });
+let earlyRefused;
+try { await chain.broadcast(early.hex); earlyRefused = false; } catch (e) { earlyRefused = String(e.reason ?? e.message).split(" (")[0]; }
+check("…and so does the network, if forced", earlyRefused !== false, String(earlyRefused));
+
+// Move the private chain's clock past the date, as the library check does.
+node.network.time.offset = T - Math.floor(Date.now() / 1000) + 3600;
+for (let i = 0; i < 12; i++) await rpc("generatetoaddress", [1, miner.address]);
+st = await stateOf();
+check("After the date it shows as lapsed, still holding the money", st.state === "lapsed" && st.confirmed === locking.sent);
+
+const home = await takeHome({ account: saver, chain, lock, feeRate: 2, medianTime: await chain.medianTime() });
+await chain.broadcast(home.hex);
+await rpc("generatetoaddress", [1, miner.address]);
+check("The owner alone takes it home, and the network accepts it", (await stateOf()).state === "withdrawn",
+  `${home.sent} sats home, fee ${home.fee}`);
+check("…back into the waiting balance, every sat accounted for",
+  (await waitingBalance(chain, saver.address)).confirmed === home.sent && home.sent + home.fee === locking.sent);
+
 await node.close();
 rule();
 console.log(failures === 0
-  ? "Milestone 1's key module works on a real chain: create, fund, restore, send out, and the refusals hold."
+  ? "The key module works on a real chain: create, fund, restore, send out, lock, and take a lock home after its date."
   : `${failures} check(s) failed.`);
 rule();
 process.exit(failures === 0 ? 0 : 1);

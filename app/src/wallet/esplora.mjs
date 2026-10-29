@@ -15,6 +15,20 @@ export function esploraChain(baseUrl, fetchImpl = globalThis.fetch) {
       return list.map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, confirmed: !!u.status?.confirmed }));
     },
     txHex: (txid) => get(`/tx/${txid}/hex`, "text"),
+    /** Has anything ever been sent to this address, confirmed or not? */
+    async everFunded(address) {
+      const a = await get(`/address/${address}`);
+      return (a.chain_stats?.funded_txo_count ?? 0) + (a.mempool_stats?.funded_txo_count ?? 0) > 0;
+    },
+    /**
+     * The chain's own clock: the median time of the last eleven blocks. A
+     * lock's date is judged against this, not against any phone's clock, and
+     * it runs about an hour behind real time.
+     */
+    async medianTime() {
+      const hash = await get("/blocks/tip/hash", "text");
+      return (await get(`/block/${hash.trim()}`)).mediantime;
+    },
     /** A fee rate likely to confirm within about half an hour, sats/vbyte. */
     async feeRate() {
       try { const f = await get("/v1/fees/recommended"); return Math.max(1, Math.ceil(f.halfHourFee)); }

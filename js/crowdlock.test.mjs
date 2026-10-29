@@ -101,6 +101,12 @@ refuses("A title that could break the signed statement",
   checkCrowdlock({ ...kop, declaration: { ...kop.declaration, title: "Thing (v9)" } }), "brackets");
 refuses("A fee cap of 100%",
   checkCrowdlock({ ...kop, max_commitment_fee: 1 }), "max_commitment_fee");
+refuses("A fraction of a year on real bitcoin",
+  checkCrowdlock({ ...kop, lock_lengths_years: [0.5, 1] }), "whole numbers of years");
+check("A test Crowdlock may offer an hour",
+  !checkCrowdlock({ ...kop, network: "testnet4", lock_lengths_years: [1 / 8766, 1] }).problems?.some((p) => p.includes("lock_lengths_years")));
+refuses("…but not nothing",
+  checkCrowdlock({ ...kop, network: "testnet4", lock_lengths_years: [0] }), "positive numbers of years");
 refuses("An unknown network",
   checkCrowdlock({ ...kop, network: "ethereum" }), "network must be");
 

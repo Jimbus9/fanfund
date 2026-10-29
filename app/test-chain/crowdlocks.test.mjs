@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
-import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL } from "../src/crowdlocks.mjs";
+import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister } from "../src/crowdlocks.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SITE = "https://jimbus9.github.io/fanfund/";
@@ -79,7 +79,7 @@ await refuses("A register that names a different declaration",
   "");
 await refuses("A link that is not https", loadCrowdlock("http://jimbus9.github.io/fanfund/crowdlocks/kop-fund.json", siteFetch()), "https");
 await refuses("Something that is not a link", loadCrowdlock("the kop fund please", siteFetch()), "not a link");
-await refuses("A link to nothing", loadCrowdlock(`${SITE}crowdlocks/nonesuch.json`, siteFetch()), "could not load");
+await refuses("A link to nothing, said plainly", loadCrowdlock(`${SITE}crowdlocks/nonesuch.json`, siteFetch()), "no Crowdlock file at that link");
 
 console.log("-".repeat(80));
 console.log("TOTALS AND JOINING");
@@ -127,6 +127,22 @@ check("Real bitcoin gets a rough pound figure", (await poundsPerBtc({ network: "
 check("Test bitcoin gets none, because it has no value", (await poundsPerBtc({ network: "testnet4", chain_api: "x" }, priceFetch)) === null);
 check("No price source means no pound figure, not a wrong one", (await poundsPerBtc({ network: "mainnet", chain_api: "https://down" }, async () => { throw new Error("offline"); })) === null);
 check("The link points at the counting rule's section on the minimum", COUNTING_RULE_URL.endsWith("counting-rule.md#the-minimum"));
+
+const reg = { locks: [{ address: "tb1qa", member: "TB1QME", locktime: 5, cosigner_pubkey: "02cc" }, { address: "tb1qb", member: "tb1qother", locktime: 6, cosigner_pubkey: "02cc" }] };
+const mine = locksOnRegister(reg, "tb1qme");
+check("A member's own locks are found on the register, whatever the case", mine.length === 1 && mine[0].address === "tb1qa" && mine[0].cosignerPubkey === "02cc");
+let lockPosted = null;
+const lockOk = await submitLock({ lock_endpoint: "https://example.com/lock/submit?c=x" },
+  { ownerPubkey: "02aa", cosignerPubkey: "02cc", locktime: 9, address: "tb1qa" },
+  async (url, init) => { lockPosted = { url, body: JSON.parse(init.body) }; return Response.json({ ok: true }); });
+check("A lock is posted to the Crowdlock's own lock endpoint, in the register's field names",
+  lockOk.ok && lockPosted.url.endsWith("?c=x") && lockPosted.body.owner_pubkey === "02aa" && lockPosted.body.cosigner_pubkey === "02cc" && lockPosted.body.locktime === 9);
+const again = await submitLock({ lock_endpoint: "https://x" }, { ownerPubkey: "a", cosignerPubkey: "b", locktime: 1, address: "c" },
+  async () => Response.json({ error: "that lock is already on the register" }, { status: 409 }));
+check("A lock already on the register counts as done", again.ok);
+const early = await submitLock({ lock_endpoint: "https://x" }, { ownerPubkey: "a", cosignerPubkey: "b", locktime: 1, address: "c" },
+  async () => Response.json({ error: "there are no confirmed coins at that lock address yet" }, { status: 409 }));
+check("Any other refusal is passed on as it was given", !early.ok && early.error.includes("no confirmed coins"));
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The app's Crowdlock loader accepts the real files and refuses doctored ones." : `${failures} check(s) failed.`);

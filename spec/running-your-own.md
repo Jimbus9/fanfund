@@ -110,7 +110,7 @@ Fund's is `crowdlocks/kop-fund.json`: copy it and change the values.
 | `declaration` | Its title, version, file and SHA-256. **The SHA-256 is your instance's identity** | Supporters' Declaration v1, `declaration-v1.txt`, `3a0a0bca…6209b96` |
 | `network` | Which chain | `mainnet` |
 | `unit` | Unit of account for every published figure | `BTC` |
-| `lock_lengths_years` | The fixed options a member may choose | 1, 3 or 5 |
+| `lock_lengths_years` | The fixed options a member may choose. Whole years on real bitcoin; a test Crowdlock may offer fractions (an hour is `1/8766`) so a lock can be made and taken home in one sitting | 1, 3 or 5 |
 | `minimum_counted_lock_sats` | Below this, a lock does not count towards the total | 200,000 |
 | `cosigner_keys` | Public keys for the lock's purchase exit | **Not yet chosen** — an empty list |
 | `gathering_window_max_days` | Longest a proposal may gather | 28 |

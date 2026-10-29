@@ -5,7 +5,9 @@
 //              →  Restore: type the backup words → Home
 //   Home       →  the waiting balance, Add money (QR + copy), Send out,
 //                 and the Crowdlocks: each one checked before it is shown
-//   Crowdlock  →  its declaration, and Sign and join in one tap
+//   Crowdlock  →  its declaration, and Sign and join in one tap; then, for a
+//                 member, Your locks: progress to the minimum, Lock it,
+//                 each lock's state, and Take it home after its date
 //   Add        →  any other Crowdlock, by link, checked the same way
 //
 // Every screen here is presentation. Anything touching keys or money goes
@@ -19,10 +21,19 @@ import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
-import { newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement } from "./src/wallet/core.mjs";
+import {
+  newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement,
+  lockFor, lockDate, buildLock, lockState, takeHome,
+} from "./src/wallet/core.mjs";
 // @ts-ignore — plain module shared with the chain tests
-import { STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc } from "./src/crowdlocks.mjs";
-import { loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks } from "./src/storage";
+import {
+  STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
+  locksOnRegister, submitLock,
+} from "./src/crowdlocks.mjs";
+import {
+  loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
+  loadSavedLocks, saveLock, forgetSavedLocks,
+} from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
 type Screen =
@@ -191,7 +202,7 @@ function Home({ words, go }: { words: string; go: Go }) {
     "Only do this if your 12 words are written down. Without them the money cannot be recovered.",
     [
       { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); await forgetAddedCrowdlocks(); go({ name: "welcome" }); } },
+      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); await forgetAddedCrowdlocks(); await forgetSavedLocks(); go({ name: "welcome" }); } },
     ],
   );
 
@@ -403,10 +414,6 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
         <Text style={s.good}>Checked on this phone: the declaration matches its fingerprint and the register agrees.</Text>
       </View>
 
-      {/* Milestone 3 puts the fan's progress here: their waiting balance against
-          THIS Crowdlock's minimum, turning into the lock button once past it.
-          Here, not on Home — the waiting balance belongs to no Crowdlock until
-          the fan chooses one (James, 29 October). */}
       <Text style={s.p}>
         A lock counts from <Text style={{ fontWeight: "700" }}>{shortBtc(c.crowdlock.minimum_counted_lock_sats)}</Text>
         {gbp ? ` (about £${Math.round(Number(c.crowdlock.minimum_counted_lock_sats) / 1e8 * gbp)} today)` : ""}.
@@ -432,9 +439,186 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
               <Button label={busy ? "Signing and sending…" : "Sign and join"} disabled={busy} onPress={join} />
             </>}
       {result && <Text style={result.ok ? s.good : s.error}>{result.text}</Text>}
+
+      {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} />}
+
       <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Locking
+//
+// On each Crowdlock's own page, not on Home: the waiting balance belongs to no
+// Crowdlock until the fan picks one (James, 29 October). Progress towards THIS
+// Crowdlock's minimum shows here, and becomes the lock button once past it.
+// ---------------------------------------------------------------------------
+
+type LockTerms = { address: string; locktime: number; cosignerPubkey: string };
+type LockRow = LockTerms & { state: string; confirmed: bigint; arriving: bigint; onRegister: boolean; note?: string };
+
+function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { ok: true }>; onChange: () => void }) {
+  const cosigner: string | undefined = (c.crowdlock.cosigner_keys ?? [])[0];
+  const minimum = BigInt(c.crowdlock.minimum_counted_lock_sats);
+  const lengths: number[] = c.crowdlock.lock_lengths_years;
+  const [waiting, setWaiting] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
+  const [rows, setRows] = useState<LockRow[] | null>(null);
+  const [years, setYears] = useState<number>(lengths[0]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setWaiting(await waitingBalance(chain, account.address));
+      const medianTime = await chain.medianTime();
+      const onReg = locksOnRegister(c.register, account.address) as LockTerms[];
+      const saved = (await loadSavedLocks()).filter((l) => l.crowdlock === c.url);
+      const all: LockTerms[] = [...onReg];
+      for (const l of saved) if (!all.some((x) => x.address === l.address)) all.push(l);
+      const out: LockRow[] = [];
+      for (const l of all) {
+        const st = await lockState({ chain, lock: l, medianTime });
+        const row: LockRow = { ...l, ...st, onRegister: onReg.some((x) => x.address === l.address) };
+        // A lock with confirmed money that the register does not have yet is
+        // sent to it now, every time this page opens, until it is taken.
+        if (!row.onRegister && st.confirmed > 0n) {
+          const r = await submitLock(c.crowdlock, { ownerPubkey: account.publicKey, ...l });
+          if (r.ok) { row.onRegister = true; row.note = "Sent to the register just now — it appears within a minute."; }
+          else row.note = `Not on the register yet: ${r.error}`;
+        }
+        out.push(row);
+      }
+      out.sort((a, b) => a.locktime - b.locktime);
+      setRows(out);
+    } catch (e: any) { setMessage({ ok: false, text: `Could not read the chain: ${e.message ?? e}` }); }
+  }, [account.address, c]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  if (!cosigner) return (
+    <View>
+      <Text style={s.h2}>Your locks</Text>
+      <Text style={s.p}>This Crowdlock hasn't published its co-signer key yet, so nothing can be locked for it yet. Your waiting money stays yours in the meantime.</Text>
+    </View>
+  );
+
+  const lockIt = () => {
+    if (!waiting) return;
+    const locktime = lockDate(years);
+    Alert.alert(
+      `Lock ${btc(waiting.confirmed)} until ${when(locktime)}?`,
+      "Until that date it can only leave the lock into a purchase you sign for yourself. After it, you can take it home whenever you like. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Lock it", onPress: async () => {
+          setBusy("lock"); setMessage(null);
+          try {
+            const lock = lockFor({ account, cosignerPubkey: cosigner, locktime });
+            const feeRate = await chain.feeRate();
+            const tx = await buildLock({ account, chain, lock, feeRate });
+            // The terms are saved before the money moves, and checked saved.
+            await saveLock({ crowdlock: c.url, address: lock.address, locktime, cosignerPubkey: cosigner });
+            await chain.broadcast(tx.hex);
+            setMessage({ ok: true, text: `Locked ${btc(tx.sent)} (fee ${btc(tx.fee)}). Once it confirms — usually within the hour — it goes on the register by itself.` });
+            await refresh(); onChange();
+          } catch (e: any) { setMessage({ ok: false, text: String(e.message ?? e) }); }
+          setBusy(null);
+        } },
+      ],
+    );
+  };
+
+  const home = (row: LockRow) => {
+    Alert.alert(
+      `Take ${btc(row.confirmed)} home?`,
+      "It goes back to your waiting balance, where you can lock it again or send it out. It stops counting towards this Crowdlock's total.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Take it home", onPress: async () => {
+          setBusy(row.address); setMessage(null);
+          try {
+            const tx = await takeHome({ account, chain, lock: row, feeRate: await chain.feeRate(), medianTime: await chain.medianTime() });
+            await chain.broadcast(tx.hex);
+            setMessage({ ok: true, text: `${btc(tx.sent)} is on its way back to your waiting balance (fee ${btc(tx.fee)}).` });
+            await refresh(); onChange();
+          } catch (e: any) { setMessage({ ok: false, text: String(e.message ?? e) }); }
+          setBusy(null);
+        } },
+      ],
+    );
+  };
+
+  const ready = waiting !== null && waiting.confirmed >= minimum && waiting.confirmed > 0n;
+
+  return (
+    <View>
+      <Text style={s.h2}>Your locks</Text>
+
+      {waiting === null ? <ActivityIndicator /> : ready ? (
+        <View style={s.panel}>
+          <Text style={s.p}><Text style={s.bold}>{btc(waiting.confirmed)}</Text> is waiting, enough for a lock that counts.</Text>
+          <Text style={s.label}>Lock it for</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {lengths.map((y) => (
+              <Pressable key={y} onPress={() => setYears(y)} style={[s.chip, years === y && s.chipOn]}>
+                <Text style={[s.chipText, years === y && { color: "#fff" }]}>{lengthLabel(y)}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={s.note}>Unlocks {when(lockDate(years))}.</Text>
+          <Button label={busy === "lock" ? "Locking…" : `Lock ${btc(waiting.confirmed)}`} disabled={busy !== null} onPress={lockIt} />
+        </View>
+      ) : (
+        <Text style={s.p}>
+          {waiting.confirmed === 0n
+            ? `Nothing waiting yet. Add money on the home screen; once ${shortBtc(c.crowdlock.minimum_counted_lock_sats)} is waiting, you can lock it here.`
+            : `${btc(waiting.confirmed)} waiting. ${btc(minimum - waiting.confirmed)} more and you can lock it.`}
+        </Text>
+      )}
+      {waiting && waiting.arriving > 0n && <Text style={s.note}>+ {btc(waiting.arriving)} arriving — it can be locked once it confirms.</Text>}
+      {message && <Text style={message.ok ? s.good : s.error}>{message.text}</Text>}
+
+      {rows === null ? null : rows.length === 0 ? null : rows.map((r) => (
+        <View key={r.address} style={s.card}>
+          <Text style={s.cardTitle}>{btc(r.confirmed > 0n ? r.confirmed : r.arriving)} · {STATE[r.state] ?? r.state}</Text>
+          <Text style={s.note}>
+            {r.state === "lapsed" || r.state === "withdrawn" ? "Unlocked" : "Unlocks"} {when(r.locktime)}
+            {r.state === "locked" && r.confirmed < minimum ? " · below the minimum, so not counted" : ""}
+            {r.state === "locked" && r.locktime * 1000 < Date.now() ? " · date reached; the network's clock catches up within about an hour" : ""}
+          </Text>
+          {r.confirmed > 0n && <Text style={r.onRegister ? s.good : s.note}>{r.note ?? (r.onRegister ? "On the register" : "Goes on the register once it confirms")}</Text>}
+          {r.state === "arriving" && <Text style={s.note}>Goes on the register once it confirms.</Text>}
+          <Text style={[s.mono, { fontSize: 12 }]} selectable>{r.address}</Text>
+          {r.state === "lapsed" && <Button label={busy === r.address ? "Sending…" : "Take it home"} disabled={busy !== null} onPress={() => home(r)} />}
+        </View>
+      ))}
+      <Button label="Refresh" kind="plain" onPress={() => { setMessage(null); refresh(); }} />
+    </View>
+  );
+}
+
+const STATE: Record<string, string> = {
+  empty: "waiting for money",
+  arriving: "arriving",
+  locked: "locked",
+  lapsed: "date passed — yours to take home",
+  withdrawn: "taken home",
+};
+
+function lengthLabel(years: number) {
+  const hours = Math.round(years * 8766);
+  if (years >= 1) return `${years} year${years === 1 ? "" : "s"}`;
+  if (hours >= 24) return `${Math.round(hours / 24)} day${Math.round(hours / 24) === 1 ? "" : "s"} (test)`;
+  return `${hours} hour${hours === 1 ? "" : "s"} (test)`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function when(locktime: number) {
+  const d = new Date(locktime * 1000);
+  const date = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  // A lock rounded to a plain date reads as a date; a short test lock needs the time.
+  if (locktime % 86400 === 0) return date;
+  return `${date}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function AddCrowdlock({ words, go }: { words: string; go: Go }) {
@@ -513,4 +697,7 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 17, fontWeight: "700", color: "#111" },
   link: { fontSize: 15, color: RED, fontWeight: "600", marginTop: 4 },
   declaration: { fontSize: 15, lineHeight: 22, color: "#222", marginVertical: 8 },
+  chip: { borderWidth: 1, borderColor: "#ccc", borderRadius: 18, paddingVertical: 8, paddingHorizontal: 14 },
+  chipOn: { backgroundColor: RED, borderColor: RED },
+  chipText: { fontSize: 15, color: "#111", fontWeight: "600" },
 });

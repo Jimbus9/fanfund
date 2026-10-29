@@ -279,7 +279,7 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
     const testSig = sign(membershipStatement(test));
     const ok = await post("?c=kop-fund-testnet4", { address: tbAddress, signature: testSig });
     const okBody = await ok.json();
-    check("A testnet4 signer joins the test Crowdlock", ok.status === 200 && okBody.n === 1, okBody.error ?? `member ${okBody.n}`);
+    check("A testnet4 signer joins the test Crowdlock", ok.status === 200 && okBody.n === JSON.parse(readFileSync(new URL("../" + test.register.registrations, import.meta.url), "utf8")).members.length + 1, okBody.error ?? `member ${okBody.n}`);
     check("…and it is written to the TEST register, nowhere else",
       written.length === 1 && written[0].path === test.register.registrations, written.map((w) => w.path).join(", "));
 

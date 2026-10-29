@@ -98,6 +98,7 @@ export function accountFromWords(text, network = "mainnet") {
     path: `m${originPath}${keyPath}`,
     publicKey: toHex(root.derivePath(`m${originPath}${keyPath}`).publicKey),
     address: output.getAddress(),
+    keyExpression,
     /** For signing. The library finds the right key from the path above. */
     signer: () => root,
     output,
@@ -207,6 +208,142 @@ export async function buildSend({ account, chain, to, amount, feeRate }) {
 }
 
 // ---------------------------------------------------------------------------
+// Locks
+// ---------------------------------------------------------------------------
+//
+// A lock is the standard miniscript of spec/lock-format.md, written as a
+// descriptor and handed to the library, which makes the script and address:
+//
+//   wsh(and_v(v:pk(owner),or_i(after(date),pk(cosigner))))
+//
+// The library check (lock/library-check) proved this gives byte-for-byte the
+// testnet-proven script, and the app's tests prove it matches the address the
+// register rebuilds (js/lockrecord.mjs). Locking is an ordinary send to that
+// address. Going home is the library's own spend of the owner-alone branch,
+// which sets the transaction's date itself; the network refuses it until the
+// date has passed, whatever this code says.
+
+const YEAR = 365.25 * 86400;
+const DAY = 86400;
+const PUBKEY = /^0[23][0-9a-f]{64}$/;
+
+/**
+ * The date a lock of `years` made now unlocks, as unix seconds. Rounded up to
+ * the next midnight (UTC) so a lock reads as a plain date. Test Crowdlocks may
+ * offer lengths under a day; those are not rounded.
+ */
+export function lockDate(years, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const t = Math.ceil(nowSeconds + years * YEAR);
+  return years * YEAR < DAY ? t : Math.ceil(t / DAY) * DAY;
+}
+
+function lockDescriptor(account, cosignerPubkey, locktime) {
+  return `wsh(and_v(v:pk(${account.keyExpression}),or_i(after(${locktime}),pk(${cosignerPubkey}))))`;
+}
+
+/**
+ * The lock for this account, co-signer and date: its address and terms.
+ * Refuses a co-signer that is the fan's own key (one person could then move
+ * the coins any time) and anything that is not a date.
+ */
+export function lockFor({ account, cosignerPubkey, locktime }) {
+  const cosigner = String(cosignerPubkey ?? "").toLowerCase();
+  if (!PUBKEY.test(cosigner)) throw new Error("that co-signer key is not a compressed public key");
+  if (cosigner.slice(2) === account.publicKey.slice(2)) {
+    throw new Error("the co-signer key is your own key — that would not be a lock");
+  }
+  if (!Number.isInteger(locktime) || locktime < 500000000) throw new Error("a lock's date must be a date");
+  const output = new Output({ descriptor: lockDescriptor(account, cosigner, locktime), network: account.network });
+  return { address: output.getAddress(), ownerPubkey: account.publicKey, cosignerPubkey: cosigner, locktime };
+}
+
+/**
+ * Lock everything waiting: one send of all confirmed waiting money to the
+ * lock's address. Same refusals as any send.
+ */
+export async function buildLock({ account, chain, lock, feeRate }) {
+  const check = lockFor({ account, cosignerPubkey: lock.cosignerPubkey, locktime: lock.locktime });
+  if (check.address !== lock.address) throw new Error("those lock terms do not make that address — refusing");
+  return buildSend({ account, chain, to: lock.address, amount: "all", feeRate });
+}
+
+/**
+ * What state a lock is in, from the chain alone (spec/counting-rule.md):
+ *   "empty"      nothing has ever been sent to it
+ *   "arriving"   money is on its way, not yet confirmed
+ *   "locked"     confirmed money, date still ahead
+ *   "lapsed"     confirmed money, date passed — the owner may take it home
+ *   "withdrawn"  it held money once and is empty now
+ * `medianTime` is the chain's own clock, the one its date is judged by.
+ */
+export async function lockState({ chain, lock, medianTime }) {
+  const coins = await chain.utxos(lock.address);
+  const confirmed = coins.filter((c) => c.confirmed).reduce((s, c) => s + BigInt(c.value), 0n);
+  const arriving = coins.filter((c) => !c.confirmed).reduce((s, c) => s + BigInt(c.value), 0n);
+  let state;
+  if (confirmed > 0n) state = lock.locktime > medianTime ? "locked" : "lapsed";
+  else if (arriving > 0n) state = "arriving";
+  else state = (await chain.everFunded(lock.address)) ? "withdrawn" : "empty";
+  return { state, confirmed, arriving };
+}
+
+/**
+ * Take a lapsed lock home: the owner alone spends every confirmed coin in it
+ * back to their own address (or `to`), through the going-home branch.
+ *
+ * Refuses before the chain's clock has passed the date — the network would
+ * refuse it anyway, but there is no reason to send something that must fail.
+ * `ignoreDate` exists only so the tests can prove the network refuses it too.
+ *
+ * @param {{ account: any, chain: any, lock: any, feeRate: number, medianTime: number, to?: string, ignoreDate?: boolean }} args
+ * @returns {Promise<{ hex: string, txid: string, fee: bigint, sent: bigint }>}
+ */
+export async function takeHome({ account, chain, lock, feeRate, medianTime, to, ignoreDate = false }) {
+  const net = account.network;
+  if (!Number.isFinite(feeRate) || feeRate < 1 || feeRate > 1000) {
+    throw new Error("fee rate must be between 1 and 1000 sats per vbyte");
+  }
+  if (!ignoreDate && !(medianTime > lock.locktime)) {
+    throw new Error("this lock's date has not passed yet on the network's clock");
+  }
+  const check = lockFor({ account, cosignerPubkey: lock.cosignerPubkey, locktime: lock.locktime });
+  if (check.address !== lock.address) throw new Error("those lock terms do not make that address — refusing");
+
+  // signersPubKeys tells the library only the owner will sign, so it takes
+  // the going-home branch and sets the transaction's date itself.
+  const out = new Output({
+    descriptor: lockDescriptor(account, check.cosignerPubkey, lock.locktime),
+    network: net,
+    signersPubKeys: [fromHex(account.publicKey)],
+  });
+  let dest;
+  try { dest = new Output({ descriptor: `addr(${String(to ?? account.address).trim()})`, network: net }); }
+  catch { throw new Error("that is not an address on this network"); }
+
+  const coins = (await chain.utxos(lock.address)).filter((c) => c.confirmed);
+  if (coins.length === 0) throw new Error("there is no confirmed money in this lock");
+  const total = coins.reduce((s, c) => s + BigInt(c.value), 0n);
+
+  const weight = 44 + coins.length * out.inputWeight(true, "DANGEROUSLY_USE_FAKE_SIGNATURES") + dest.outputWeight();
+  const fee = BigInt(Math.ceil((weight / 4) * feeRate));
+  const sent = total - fee;
+  if (sent < DUST_SATS) throw new Error("the fee would take almost all of it — too little to bring home");
+  // Half, not a tenth: bringing a small lock home is still worth doing.
+  if (fee * 2n > total) throw new Error("the fee would be more than half of the lock — refusing");
+
+  const psbt = new Psbt({ network: net });
+  const finalizers = [];
+  for (const c of coins) {
+    finalizers.push(out.updatePsbtAsInput({ psbt, txHex: await chain.txHex(c.txid), vout: c.vout }));
+  }
+  dest.updatePsbtAsOutput({ psbt, value: sent });
+  signers.signBIP32({ psbt, masterNode: account.signer() });
+  for (const finalize of finalizers) finalize({ psbt });
+  const tx = psbt.extractTransaction();
+  return { hex: tx.toHex(), txid: tx.getId(), fee, sent };
+}
+
+// ---------------------------------------------------------------------------
 // Signing a Crowdlock's declaration
 // ---------------------------------------------------------------------------
 
@@ -234,6 +371,10 @@ function toBase64(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
+}
+
+function fromHex(hex) {
+  return Uint8Array.from(hex.match(/../g).map((x) => parseInt(x, 16)));
 }
 
 function toHex(bytes) {

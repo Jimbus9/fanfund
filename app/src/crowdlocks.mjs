@@ -66,7 +66,12 @@ export async function loadCrowdlock(url, fetchImpl = globalThis.fetch) {
   const getText = async (u) => { const r = await fetchImpl(u, { cache: "no-store" }); if (!r.ok) throw new Error(`${r.status} from ${u}`); return r.text(); };
 
   let crowdlock;
-  try { crowdlock = await getJson(fileUrl); } catch (e) { return fail(`could not load the Crowdlock file: ${e.message}`); }
+  try { crowdlock = await getJson(fileUrl); }
+  catch (e) {
+    return fail(String(e.message).startsWith("404 ")
+      ? "There's no Crowdlock file at that link. Check it was copied in full."
+      : `could not load the Crowdlock file: ${e.message}`);
+  }
 
   const base = baseFor(fileUrl);
   let declarationText;
@@ -157,6 +162,38 @@ export function shortBtc(sats) {
   const v = BigInt(sats);
   const frac = (v % 100000000n).toString().padStart(8, "0").replace(/0+$/, "");
   return `${v / 100000000n}${frac ? "." + frac : ""} BTC`;
+}
+
+/** This member's locks on the register, as the app's lock terms. */
+export function locksOnRegister(register, memberAddress) {
+  const a = String(memberAddress).toLowerCase();
+  return (register.locks ?? [])
+    .filter((l) => String(l.member).toLowerCase() === a)
+    .map((l) => ({ address: l.address, locktime: l.locktime, cosignerPubkey: l.cosigner_pubkey }));
+}
+
+/**
+ * Put a lock on the Crowdlock's register, through its lock endpoint. Needs the
+ * lock's money to have confirmed. Returns { ok: true } or { ok: false, error }.
+ * "Already on the register" counts as success.
+ */
+export async function submitLock(crowdlock, { ownerPubkey, cosignerPubkey, locktime, address }, fetchImpl = globalThis.fetch) {
+  if (!crowdlock.lock_endpoint) {
+    return { ok: false, error: "this Crowdlock has no lock endpoint — submit the lock by pull request instead" };
+  }
+  try {
+    const res = await fetchImpl(crowdlock.lock_endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ owner_pubkey: ownerPubkey, cosigner_pubkey: cosignerPubkey, locktime, address }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.ok) return { ok: true };
+    if (res.status === 409 && /already on the register/.test(body.error ?? "")) return { ok: true };
+    return { ok: false, error: body.error ?? `the register answered ${res.status}` };
+  } catch {
+    return { ok: false, error: "could not reach the register — the lock is safe, it will be tried again" };
+  }
 }
 
 /**

@@ -67,8 +67,13 @@ export function checkCrowdlock(c, { declarationText } = {}) {
   need(NETWORKS.includes(c.network), `network must be one of ${NETWORKS.join(", ")}`);
   need(c.unit === "BTC", "unit must be BTC");
 
-  need(Array.isArray(c.lock_lengths_years) && c.lock_lengths_years.length > 0 && c.lock_lengths_years.every(posInt),
-    "lock_lengths_years must be a list of whole numbers of years");
+  // Whole years on real bitcoin. A test Crowdlock may offer fractions of a
+  // year — an hour, a day — so a lock can be made and taken home in one sitting.
+  const lengthOk = c.network === "mainnet" ? posInt : (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
+  need(Array.isArray(c.lock_lengths_years) && c.lock_lengths_years.length > 0 && c.lock_lengths_years.every(lengthOk),
+    c.network === "mainnet"
+      ? "lock_lengths_years must be a list of whole numbers of years"
+      : "lock_lengths_years must be a list of positive numbers of years");
   need(Number.isInteger(c.minimum_counted_lock_sats) && c.minimum_counted_lock_sats >= 0,
     "minimum_counted_lock_sats must be a whole number of sats");
 
