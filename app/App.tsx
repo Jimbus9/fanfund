@@ -12,7 +12,7 @@
 //
 // Every screen here is presentation. Anything touching keys or money goes
 // through src/wallet/core.mjs, and nothing else may.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
@@ -30,6 +30,8 @@ import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
   locksOnRegister, submitLock,
 } from "./src/crowdlocks.mjs";
+// @ts-ignore — plain module
+import { postToRelays } from "./src/relays.mjs";
 import {
   loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
   loadSavedLocks, saveLock, forgetSavedLocks,
@@ -396,6 +398,16 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
   const join = async () => {
     setBusy(true); setResult(null);
     const signature = signStatement(account, c.statement);
+    // A Crowdlock that names relays takes its members from there: posted
+    // publicly, collected by its own repository within about half an hour.
+    if (Array.isArray(c.crowdlock.relays)) {
+      const p = await postToRelays(c.crowdlock, { type: "join", address: account.address, signature });
+      setResult(p.ok
+        ? { ok: true, text: `Signed and posted to ${p.accepted} of ${p.total} relays. You'll be on the register within about half an hour — open this page again then.` }
+        : { ok: false, text: "No relay took it just now — your signature is fine. Check your connection, or turn off any VPN, and try again." });
+      setBusy(false);
+      return;
+    }
     const r = await submitJoin(c.crowdlock, { address: account.address, signature });
     setResult(r.ok ? { ok: true, text: `You are member ${r.n}.` } : { ok: false, text: r.error + (r.alternative ? ` You can still ${r.alternative}.` : "") });
     setBusy(false);
@@ -473,6 +485,25 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   const [addWaiting, setAddWaiting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const viaRelays = Array.isArray(c.crowdlock.relays);
+  // Locks already posted to the relays while this page is open, so opening it
+  // again does not post them again and again. The inbox ignores repeats anyway.
+  const posted = useRef(new Set<string>());
+
+  /** Put a lock on the register: through the relays if the Crowdlock names them, else its lock endpoint. */
+  const publish = useCallback(async (l: LockTerms): Promise<{ ok: boolean; note: string }> => {
+    const terms = { ownerPubkey: account.publicKey, ...l };
+    if (viaRelays) {
+      if (posted.current.has(l.address)) return { ok: true, note: "Posted to the relays — on the register within about half an hour." };
+      const p = await postToRelays(c.crowdlock, { type: "lock", owner_pubkey: account.publicKey, cosigner_pubkey: l.cosignerPubkey, locktime: l.locktime, address: l.address });
+      if (p.ok) posted.current.add(l.address);
+      return p.ok
+        ? { ok: true, note: `Posted to ${p.accepted} of ${p.total} relays — on the register within about half an hour.` }
+        : { ok: false, note: "Not on the register yet: no relay answered. It will be tried again when you open this page." };
+    }
+    const r = await submitLock(c.crowdlock, terms);
+    return r.ok ? { ok: true, note: "Sent to the register just now — it appears within a minute." } : { ok: false, note: `Not on the register yet: ${r.error}` };
+  }, [account.publicKey, c, viaRelays]);
 
   const refresh = useCallback(async () => {
     try {
@@ -489,9 +520,8 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
         // A lock with confirmed money that the register does not have yet is
         // sent to it now, every time this page opens, until it is taken.
         if (!row.onRegister && st.confirmed > 0n) {
-          const r = await submitLock(c.crowdlock, { ownerPubkey: account.publicKey, ...l });
-          if (r.ok) { row.onRegister = true; row.note = "Sent to the register just now — it appears within a minute."; }
-          else row.note = `Not on the register yet: ${r.error}`;
+          const p = await publish(l);
+          row.note = p.note;
         }
         out.push(row);
       }
@@ -502,7 +532,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
       setWaiting((w) => w ?? { confirmed: 0n, arriving: 0n, failed: true } as any);
       setRows((r) => r ?? []);
     }
-  }, [account.address, c]);
+  }, [account.address, c, publish]);
   useEffect(() => { refresh(); }, [refresh]);
 
   if (!cosigner) return (
@@ -544,6 +574,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
             // The terms are saved before the money moves, and checked saved.
             await saveLock({ crowdlock: c.url, address: lock.address, locktime, cosignerPubkey: cosigner });
             await chain.broadcast(tx.hex);
+            if (viaRelays) await publish({ address: lock.address, locktime, cosignerPubkey: cosigner });
             setAmountText("");
             setMessage({ ok: true, text: `Locked ${btc(tx.sent)} (fee ${btc(tx.fee)}). Once it confirms — usually within the hour — it goes on the register by itself.` });
             await refresh(); onChange();
@@ -594,6 +625,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
             });
             await saveLock({ crowdlock: c.url, address: newLock.address, locktime, cosignerPubkey: cosigner });
             await chain.broadcast(tx.hex);
+            if (viaRelays) await publish({ address: newLock.address, locktime, cosignerPubkey: cosigner });
             setRenewing(null); setAddWaiting(false);
             setMessage({ ok: true, text: `Locked ${btc(tx.sent)} again until ${when(locktime)} (fee ${btc(tx.fee)}). Once it confirms it goes on the register by itself.` });
             await refresh(); onChange();
@@ -654,7 +686,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
             {r.state === "locked" && r.locktime * 1000 < Date.now() ? " · date reached; the network's clock catches up within about an hour" : ""}
           </Text>
           {r.confirmed > 0n && <Text style={r.onRegister ? s.good : s.note}>{r.note ?? (r.onRegister ? "On the register" : "Goes on the register once it confirms")}</Text>}
-          {r.state === "arriving" && <Text style={s.note}>Goes on the register once it confirms.</Text>}
+          {r.state === "arriving" && <Text style={s.note}>{viaRelays ? "Posted to the relays; goes on the register once it confirms." : "Goes on the register once it confirms."}</Text>}
           <Text style={[s.mono, { fontSize: 12 }]} selectable>{r.address}</Text>
           {r.state === "lapsed" && renewing !== r.address && <>
             <Button label="Lock it again" disabled={busy !== null} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
