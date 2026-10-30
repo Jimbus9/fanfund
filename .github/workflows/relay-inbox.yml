@@ -1,0 +1,79 @@
+# The relay inbox: every few minutes, collect registrations and locks posted to
+# the Nostr relays a Crowdlock names, add the valid ones to its register, and
+# republish the site. Uses no secrets: only the permission GitHub gives every
+# repository's own jobs to write to that repository.
+#
+# Run it by hand from the Actions tab ("Run workflow"); tick "selftest" to first
+# post a registration for a brand-new test member, and watch it arrive.
+
+name: Relay inbox
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      selftest:
+        description: "Post a registration for a new test member first"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+# Never two runs at once: each reads the register, then writes it.
+concurrency:
+  group: relay-inbox
+  cancel-in-progress: false
+
+jobs:
+  inbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the relay library
+        working-directory: relay
+        run: npm ci --no-audit --no-fund
+
+      - name: Self-test — post a new test member's registration
+        if: ${{ inputs.selftest }}
+        working-directory: relay
+        run: node selftest.mjs kop-fund-testnet4 && sleep 20
+
+      - name: Collect records from the relays
+        id: inbox
+        working-directory: relay
+        run: node inbox.mjs
+
+      - name: Commit the register if anything was added
+        id: commit
+        env:
+          MESSAGE: ${{ steps.inbox.outputs.message }}
+        run: |
+          if git diff --quiet -- crowdlocks registrations.json; then
+            echo "Nothing new."
+            exit 0
+          fi
+          git config user.name "Crowdlock relay inbox"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crowdlocks registrations.json
+          git commit -m "$MESSAGE"
+          # The join and lock endpoints write to the same files; if one did
+          # meanwhile, take theirs and put ours on top.
+          for i in 1 2 3; do
+            git pull --rebase -q && git push -q && echo "pushed=yes" >> "$GITHUB_OUTPUT" && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Republish the site
+        if: steps.commit.outputs.pushed == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "Could not request a site rebuild; the next push will do it."

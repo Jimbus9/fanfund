@@ -27,3 +27,4 @@ lock/
 # The phone app and its build setup are source code, not part of the website.
 app/
 .github/
+relay/

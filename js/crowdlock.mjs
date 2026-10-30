@@ -118,6 +118,15 @@ export function checkCrowdlock(c, { declarationText } = {}) {
     }
   }
 
+  // Optional. Public Nostr relays where members post signed registrations and
+  // locks, for the Crowdlock's own repository to collect (js/inbox.mjs). No
+  // account, no server and no key of anybody's sits in that path.
+  if (c.relays !== undefined) {
+    need(Array.isArray(c.relays) && c.relays.length > 0 && c.relays.length <= 10
+      && c.relays.every((r) => typeof r === "string" && /^wss:\/\/[^\s]+$/.test(r) && r.length <= 200),
+      "relays, if given, must be a list of up to 10 wss:// addresses");
+  }
+
   return { ok: problems.length === 0, problems };
 }
 

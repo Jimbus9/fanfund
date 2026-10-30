@@ -32,5 +32,12 @@
   },
   "chain_api": "https://mempool.space/testnet4/api",
   "join_endpoint": "https://kop-fund.jimmyhy29.workers.dev/join/submit?c=kop-fund-testnet4",
-  "lock_endpoint": "https://kop-fund.jimmyhy29.workers.dev/lock/submit?c=kop-fund-testnet4"
+  "lock_endpoint": "https://kop-fund.jimmyhy29.workers.dev/lock/submit?c=kop-fund-testnet4",
+  "relays": [
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://relay.primal.net",
+    "wss://nostr.mom",
+    "wss://offchain.pub"
+  ]
 }
