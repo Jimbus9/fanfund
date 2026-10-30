@@ -12,5 +12,15 @@
       "signed": "2026-10-29"
     }
   ],
-  "locks": []
+  "locks": [
+    {
+      "address": "tb1qnry2h8e2xtyagn2nlp4222xt5h295ydg9aynqpzdlqc6gzmzqutqw3zhue",
+      "member": "tb1qslfryaahfjx7ns38a436f2zzp9rrz3nm4gyd68",
+      "owner_pubkey": "021ddaa5fec043760645ed615b8e9ef229766d8c09ddc8cf6f461cfc511f49aee2",
+      "cosigner_pubkey": "020818f8a38dd1bb06a79af42d1cb98f466cddcbed39905379daa9a5bbf1103605",
+      "locktime": 1793491200,
+      "unlocks": "2026-11-01",
+      "submitted": "2026-10-30"
+    }
+  ]
 }
