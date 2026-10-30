@@ -23,7 +23,7 @@ import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement,
-  lockFor, lockDate, buildLock, lockState, takeHome,
+  lockFor, lockDate, buildLock, lockState, takeHome, relock,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain module shared with the chain tests
 import {
@@ -467,6 +467,10 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   const [years, setYears] = useState<number>(lengths[0]);
   // Empty means everything waiting; otherwise an amount in BTC.
   const [amountText, setAmountText] = useState("");
+  // Which lapsed lock has its "Lock it again" choices open, and those choices.
+  const [renewing, setRenewing] = useState<string | null>(null);
+  const [renewYears, setRenewYears] = useState<number>(lengths[0]);
+  const [addWaiting, setAddWaiting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -570,6 +574,36 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
     );
   };
 
+  const lockAgain = (row: LockRow) => {
+    if (!cosigner) return;
+    const locktime = lockDate(renewYears);
+    const extra = addWaiting && waiting ? waiting.confirmed : 0n;
+    Alert.alert(
+      `Lock ${btc(row.confirmed + extra)} again until ${when(locktime)}?`,
+      (extra > 0n ? `That is this lock plus the ${btc(extra)} waiting. ` : "")
+        + "It moves straight into the new lock in one transaction; the network fee comes out of it. Until the new date it can only leave into a purchase you sign for yourself. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Lock it again", onPress: async () => {
+          setBusy(row.address); setMessage(null);
+          try {
+            const newLock = lockFor({ account, cosignerPubkey: cosigner, locktime });
+            const tx = await relock({
+              account, chain, lock: row, newLock, addWaiting: extra > 0n,
+              feeRate: await chain.feeRate(), medianTime: await chain.medianTime(),
+            });
+            await saveLock({ crowdlock: c.url, address: newLock.address, locktime, cosignerPubkey: cosigner });
+            await chain.broadcast(tx.hex);
+            setRenewing(null); setAddWaiting(false);
+            setMessage({ ok: true, text: `Locked ${btc(tx.sent)} again until ${when(locktime)} (fee ${btc(tx.fee)}). Once it confirms it goes on the register by itself.` });
+            await refresh(); onChange();
+          } catch (e: any) { setMessage({ ok: false, text: String(e.message ?? e) }); }
+          setBusy(null);
+        } },
+      ],
+    );
+  };
+
   const ready = waiting !== null && waiting.confirmed >= minimum && waiting.confirmed > 0n;
 
   return (
@@ -613,7 +647,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
 
       {rows === null ? null : rows.length === 0 ? null : rows.map((r) => (
         <View key={r.address} style={s.card}>
-          <Text style={s.cardTitle}>{btc(r.confirmed > 0n ? r.confirmed : r.arriving)} · {STATE[r.state] ?? r.state}</Text>
+          <Text style={s.cardTitle}>{r.state === "withdrawn" || r.state === "empty" ? "" : `${btc(r.confirmed > 0n ? r.confirmed : r.arriving)} · `}{STATE[r.state] ?? r.state}</Text>
           <Text style={s.note}>
             {r.state === "lapsed" || r.state === "withdrawn" ? "Unlocked" : "Unlocks"} {when(r.locktime)}
             {r.state === "locked" && r.confirmed < minimum ? " · below the minimum, so not counted" : ""}
@@ -622,7 +656,32 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
           {r.confirmed > 0n && <Text style={r.onRegister ? s.good : s.note}>{r.note ?? (r.onRegister ? "On the register" : "Goes on the register once it confirms")}</Text>}
           {r.state === "arriving" && <Text style={s.note}>Goes on the register once it confirms.</Text>}
           <Text style={[s.mono, { fontSize: 12 }]} selectable>{r.address}</Text>
-          {r.state === "lapsed" && <Button label={busy === r.address ? "Sending…" : "Take it home"} disabled={busy !== null} onPress={() => home(r)} />}
+          {r.state === "lapsed" && renewing !== r.address && <>
+            <Button label="Lock it again" disabled={busy !== null} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
+            <Button label={busy === r.address ? "Sending…" : "Take it home"} kind="plain" disabled={busy !== null} onPress={() => home(r)} />
+          </>}
+          {r.state === "lapsed" && renewing === r.address && <>
+            <Text style={s.label}>Lock it again for</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {lengths.map((y) => (
+                <Pressable key={y} onPress={() => setRenewYears(y)} style={[s.chip, renewYears === y && s.chipOn]}>
+                  <Text style={[s.chipText, renewYears === y && { color: "#fff" }]}>{lengthLabel(y)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {waiting && waiting.confirmed > 0n && (
+              <Pressable onPress={() => setAddWaiting(!addWaiting)} style={{ flexDirection: "row", alignItems: "center", marginTop: 12 }}>
+                <View style={[s.box, addWaiting && s.boxOn]}>{addWaiting && <Text style={{ color: "#fff", fontWeight: "800" }}>✓</Text>}</View>
+                <Text style={[s.p, { marginBottom: 0, flex: 1 }]}>Add the {btc(waiting.confirmed)} waiting too</Text>
+              </Pressable>
+            )}
+            <Text style={s.note}>New date: {when(lockDate(renewYears))}.</Text>
+            <Button
+              label={busy === r.address ? "Locking…" : `Lock ${btc(r.confirmed + (addWaiting && waiting ? waiting.confirmed : 0n))} again`}
+              disabled={busy !== null} onPress={() => lockAgain(r)}
+            />
+            <Button label="Not now" kind="plain" disabled={busy !== null} onPress={() => setRenewing(null)} />
+          </>}
         </View>
       ))}
       <Button label="Refresh" kind="plain" onPress={() => { setMessage(null); refresh(); }} />
@@ -730,6 +789,8 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 17, fontWeight: "700", color: "#111" },
   link: { fontSize: 15, color: RED, fontWeight: "600", marginTop: 4 },
   declaration: { fontSize: 15, lineHeight: 22, color: "#222", marginVertical: 8 },
+  box: { width: 24, height: 24, borderWidth: 2, borderColor: "#999", borderRadius: 4, marginRight: 10, alignItems: "center", justifyContent: "center" },
+  boxOn: { backgroundColor: RED, borderColor: RED },
   chip: { borderWidth: 1, borderColor: "#ccc", borderRadius: 18, paddingVertical: 8, paddingHorizontal: 14 },
   chipOn: { backgroundColor: RED, borderColor: RED },
   chipText: { fontSize: 15, color: "#111", fontWeight: "600" },

@@ -8,6 +8,8 @@
 //   addresses         @bitcoinerlab/descriptors  wpkh(...) and addr(...)
 //   transactions      descriptors' Psbt + Output  inputs, outputs, weights
 //   signing           descriptors' signers     sign every input
+//   finishing         descriptors' finalisers  (bitcoinjs's own, for waiting coins
+//                                              spent beside a lock in relock)
 //   signing a message @bitcoinerlab/secp256k1  signRecoverable, over the
 //                                              register's own message hash
 //
@@ -343,6 +345,71 @@ export async function takeHome({ account, chain, lock, feeRate, medianTime, to, 
   dest.updatePsbtAsOutput({ psbt, value: sent });
   signers.signBIP32({ psbt, masterNode: account.signer() });
   for (const finalize of finalizers) finalize({ psbt });
+  const tx = psbt.extractTransaction();
+  return { hex: tx.toHex(), txid: tx.getId(), fee, sent };
+}
+
+/**
+ * Lock a lapsed lock again, straight from the old lock into a new one, in one
+ * transaction: one fee, and no gap where the money sits uncounted. With
+ * `addWaiting`, every confirmed coin waiting goes into the new lock too.
+ *
+ * The old lock is spent through its going-home branch (the owner alone, after
+ * its date), exactly as takeHome does; the only difference is where the money
+ * goes. So it is refused before the old date, by this code and by the network.
+ *
+ * @param {{ account: any, chain: any, lock: any, newLock: any, feeRate: number, medianTime: number, addWaiting?: boolean }} args
+ * @returns {Promise<{ hex: string, txid: string, fee: bigint, sent: bigint }>}
+ */
+export async function relock({ account, chain, lock, newLock, feeRate, medianTime, addWaiting = false }) {
+  const net = account.network;
+  if (!Number.isFinite(feeRate) || feeRate < 1 || feeRate > 1000) {
+    throw new Error("fee rate must be between 1 and 1000 sats per vbyte");
+  }
+  if (!(medianTime > lock.locktime)) throw new Error("this lock's date has not passed yet on the network's clock");
+  const old = lockFor({ account, cosignerPubkey: lock.cosignerPubkey, locktime: lock.locktime });
+  if (old.address !== lock.address) throw new Error("those lock terms do not make that address — refusing");
+  const next = lockFor({ account, cosignerPubkey: newLock.cosignerPubkey, locktime: newLock.locktime });
+  if (next.address !== newLock.address) throw new Error("the new lock's terms do not make its address — refusing");
+  if (next.address === old.address) throw new Error("the new lock must have a new date");
+
+  const oldOut = new Output({
+    descriptor: lockDescriptor(account, old.cosignerPubkey, lock.locktime),
+    network: net,
+    signersPubKeys: [fromHex(account.publicKey)],
+  });
+  const dest = new Output({ descriptor: `addr(${next.address})`, network: net });
+
+  const lockCoins = (await chain.utxos(lock.address)).filter((c) => c.confirmed);
+  if (lockCoins.length === 0) throw new Error("there is no confirmed money in this lock");
+  const waitCoins = addWaiting ? (await chain.utxos(account.address)).filter((c) => c.confirmed) : [];
+  const total = [...lockCoins, ...waitCoins].reduce((s, c) => s + BigInt(c.value), 0n);
+
+  const weight = 44
+    + lockCoins.length * oldOut.inputWeight(true, "DANGEROUSLY_USE_FAKE_SIGNATURES")
+    + waitCoins.length * account.output.inputWeight(true, "DANGEROUSLY_USE_FAKE_SIGNATURES")
+    + dest.outputWeight();
+  const fee = BigInt(Math.ceil((weight / 4) * feeRate));
+  const sent = total - fee;
+  if (sent < DUST_SATS) throw new Error("the fee would take almost all of it — too little to lock");
+  if (fee * 10n > sent) throw new Error("the fee would be more than a tenth of the amount — refusing");
+
+  const psbt = new Psbt({ network: net });
+  const finalizers = [];
+  for (const c of lockCoins) finalizers.push(oldOut.updatePsbtAsInput({ psbt, txHex: await chain.txHex(c.txid), vout: c.vout }));
+  // Waiting coins are added by the library as usual. They are finished by
+  // bitcoinjs's own standard finaliser rather than the descriptor's, which
+  // refuses them: it checks every input against the transaction's date, and
+  // here the date belongs to the old lock's input, not to these.
+  const waitIndexes = [];
+  for (const c of waitCoins) {
+    account.output.updatePsbtAsInput({ psbt, txHex: await chain.txHex(c.txid), vout: c.vout });
+    waitIndexes.push(psbt.inputCount - 1);
+  }
+  dest.updatePsbtAsOutput({ psbt, value: sent });
+  signers.signBIP32({ psbt, masterNode: account.signer() });
+  for (const finalize of finalizers) finalize({ psbt });
+  for (const i of waitIndexes) psbt.finalizeInput(i);
   const tx = psbt.extractTransaction();
   return { hex: tx.toHex(), txid: tx.getId(), fee, sent };
 }

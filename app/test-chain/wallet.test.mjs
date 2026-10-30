@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, NETWORKS, DUST_SATS,
-  signStatement, lockFor, lockDate, buildLock, lockState, takeHome,
+  signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock,
 } from "../src/wallet/core.mjs";
 import { lockAddress } from "../../js/lockrecord.mjs";
 import { verifyMembership } from "../../js/verify.mjs";
@@ -269,6 +269,35 @@ check("The owner alone takes it home, and the network accepts it", (await stateO
   `${home.sent} sats home, fee ${home.fee}`);
 check("…back into the waiting balance, every sat accounted for",
   (await waitingBalance(chain, saver.address)).confirmed === home.sent && home.sent + home.fee === locking.sent);
+
+// Renewal: the part-lock's date passes too, and it is locked again straight
+// into a new lock, with the money that came home added in, in one transaction.
+const partDate = partLock.locktime;
+node.network.time.offset = partDate - Math.floor(Date.now() / 1000) + 3600;
+for (let i = 0; i < 12; i++) await rpc("generatetoaddress", [1, miner.address]);
+const mt2 = await chain.medianTime();
+const partState = await lockState({ chain, lock: partLock, medianTime: mt2 });
+check("The part-lock's date passes and it shows as lapsed", partState.state === "lapsed");
+
+const waitingNow = (await waitingBalance(chain, saver.address)).confirmed;
+const renewed = lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: mt2 + 2 * 86400 });
+check("The new lock is one the register would rebuild",
+  renewed.address === lockAddress({ ownerPubkey: saver.publicKey, cosignerPubkey: cosigner.publicKey, locktime: renewed.locktime }, "rb"));
+await refuses("Locking again into the same lock",
+  () => relock({ account: saver, chain, lock: partLock, newLock: partLock, feeRate: 2, medianTime: mt2 }), "new date");
+const again = await relock({ account: saver, chain, lock: partLock, newLock: renewed, feeRate: 2, medianTime: mt2, addWaiting: true });
+await chain.broadcast(again.hex);
+await rpc("generatetoaddress", [1, miner.address]);
+const renewedState = await lockState({ chain, lock: renewed, medianTime: await chain.medianTime() });
+check("Locked again in one transaction: the old lock and the waiting money, minus one fee",
+  renewedState.state === "locked" && renewedState.confirmed === partState.confirmed + waitingNow - again.fee,
+  `${renewedState.confirmed} sats, fee ${again.fee}`);
+check("…the old lock is emptied and the waiting balance with it",
+  (await lockState({ chain, lock: partLock, medianTime: await chain.medianTime() })).state === "withdrawn"
+    && (await waitingBalance(chain, saver.address)).total === 0n);
+await refuses("Locking again before the date has passed",
+  async () => relock({ account: saver, chain, lock: renewed, newLock: lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: renewed.locktime + 86400 }), feeRate: 2, medianTime: await chain.medianTime() }),
+  "not passed yet");
 
 await node.close();
 rule();
