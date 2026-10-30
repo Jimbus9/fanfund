@@ -29,6 +29,7 @@ import { writeFileSync } from "node:fs";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { HDKey } from "@scure/bip32";
+import { createRequire } from "node:module";
 
 export const PATH = "m/84'/0'/0'/0/0";
 
@@ -81,13 +82,35 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   line();
   line(`      ${pubkey}`);
   line();
+  line("  Scan this with your phone rather than typing it. Sixty-six characters");
+  line("  copied by hand is how a wrong key reaches a website, and a wrong");
+  line("  co-signer key makes every lock built from it unspendable forever.");
+  line();
+
+  // A QR code off the screen beats a USB stick here. The only thing leaving
+  // this machine is a public key, which is not secret — so the stick was
+  // never protecting anything. What a stick WOULD do is carry something in,
+  // which is the one direction that matters on an offline machine. No stick,
+  // no risk, nothing to buy.
+  const require = createRequire(import.meta.url);
+  try {
+    const qr = require("qrcode-terminal");
+    qr.generate(pubkey, { small: true }, (art) => line(art));
+  } catch {
+    line("  (QR code unavailable — run npm install in this folder.)");
+  }
+  line();
+  line(`  Check what your phone read starts ${pubkey.slice(0, 6)} and ends ${pubkey.slice(-6)}.`);
+  line();
 
   // Only the public half touches the disk. It has to leave on a USB stick,
   // and retyping 66 characters by hand is how a wrong key reaches the site.
   const out = new URL("./cosigner-pubkey.txt", import.meta.url);
   writeFileSync(out, `${pubkey}\n`);
-  line(`  Saved to cosigner-pubkey.txt so you can copy it onto a USB stick.`);
-  line("  Nothing secret is in that file.");
+  line("  Also saved to cosigner-pubkey.txt, if you would rather use a USB");
+  line("  stick than a phone. Nothing secret is in that file — but a stick");
+  line("  that has been in an online machine is the one thing that can carry");
+  line("  something back into this one, so the phone is the safer habit.");
   line();
   rule();
   line();

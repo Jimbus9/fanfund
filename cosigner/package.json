@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@scure/bip32": "1.6.2",
-    "@scure/bip39": "1.5.4"
+    "@scure/bip39": "1.5.4",
+    "qrcode-terminal": "^0.12.0"
   },
   "license": "MIT"
 }
