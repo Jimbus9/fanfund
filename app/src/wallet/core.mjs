@@ -258,13 +258,17 @@ export function lockFor({ account, cosignerPubkey, locktime }) {
 }
 
 /**
- * Lock everything waiting: one send of all confirmed waiting money to the
- * lock's address. Same refusals as any send.
+ * Lock waiting money: one send to the lock's address. `amount` is sats as a
+ * BigInt, or "all" (the default) for everything waiting. Whatever is not
+ * locked stays waiting, free for another lock or another Crowdlock. Same
+ * refusals as any send.
+ *
+ * @param {{ account: any, chain: any, lock: any, feeRate: number, amount?: bigint | "all" }} args
  */
-export async function buildLock({ account, chain, lock, feeRate }) {
+export async function buildLock({ account, chain, lock, feeRate, amount = "all" }) {
   const check = lockFor({ account, cosignerPubkey: lock.cosignerPubkey, locktime: lock.locktime });
   if (check.address !== lock.address) throw new Error("those lock terms do not make that address — refusing");
-  return buildSend({ account, chain, to: lock.address, amount: "all", feeRate });
+  return buildSend({ account, chain, to: lock.address, amount, feeRate });
 }
 
 /**

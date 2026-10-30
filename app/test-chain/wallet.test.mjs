@@ -229,9 +229,19 @@ check("Before anything is sent, the lock is empty", (await stateOf()).state === 
 
 await refuses("Locking to terms that do not make the address",
   () => buildLock({ account: saver, chain, lock: { ...lock, locktime: T + 1 }, feeRate: 2 }), "do not make that address");
+// Part of it, first: the rest stays waiting for another lock or Crowdlock.
+const partLock = lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: T + 86400 });
+const part = await buildLock({ account: saver, chain, lock: partLock, feeRate: 2, amount: 100_000n });
+await chain.broadcast(part.hex);
+await rpc("generatetoaddress", [1, miner.address]);
+const leftAfterPart = (await waitingBalance(chain, saver.address)).confirmed;
+check("Locking part of it locks exactly that amount, and the rest stays waiting",
+  (await lockState({ chain, lock: partLock, medianTime: await chain.medianTime() })).confirmed === 100_000n
+    && leftAfterPart === 300_000n - 100_000n - part.fee, `${leftAfterPart} sats still waiting`);
+
 const locking = await buildLock({ account: saver, chain, lock, feeRate: 2 });
 await chain.broadcast(locking.hex);
-check("Locking sends everything waiting into the lock", (await stateOf()).state === "arriving",
+check("Locking with no amount sends everything still waiting", (await stateOf()).state === "arriving",
   `${locking.sent} sats, fee ${locking.fee}`);
 await rpc("generatetoaddress", [1, miner.address]);
 let st = await stateOf();

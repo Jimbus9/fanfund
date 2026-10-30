@@ -465,6 +465,8 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   const [waiting, setWaiting] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
   const [rows, setRows] = useState<LockRow[] | null>(null);
   const [years, setYears] = useState<number>(lengths[0]);
+  // Empty means everything waiting; otherwise an amount in BTC.
+  const [amountText, setAmountText] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -506,12 +508,27 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
     </View>
   );
 
+  // What the fan has asked to lock: everything, or an amount they typed.
+  const chosen = ((): { amount: bigint | "all"; shown: bigint; problem?: string } => {
+    const all = waiting?.confirmed ?? 0n;
+    const t = amountText.trim().replace(",", ".");
+    if (t === "") return { amount: "all", shown: all };
+    if (!/^\d*\.?\d{0,8}$/.test(t) || t === ".") return { amount: 0n, shown: 0n, problem: "Type an amount in BTC, like 0.001" };
+    const [w, f = ""] = t.split(".");
+    const sats = BigInt(w || "0") * 100000000n + BigInt((f + "00000000").slice(0, 8));
+    if (sats < minimum) return { amount: sats, shown: sats, problem: `That's below this Crowdlock's minimum of ${shortBtc(c.crowdlock.minimum_counted_lock_sats)}, so it wouldn't count.` };
+    if (sats > all) return { amount: sats, shown: sats, problem: "That's more than you have waiting." };
+    // Asking for exactly what is waiting means everything: the fee comes out of it.
+    return sats === all ? { amount: "all", shown: all } : { amount: sats, shown: sats };
+  })();
+
   const lockIt = () => {
-    if (!waiting) return;
+    if (!waiting || chosen.problem) return;
     const locktime = lockDate(years);
     Alert.alert(
-      `Lock ${btc(waiting.confirmed)} until ${when(locktime)}?`,
-      "Until that date it can only leave the lock into a purchase you sign for yourself. After it, you can take it home whenever you like. This cannot be undone.",
+      `Lock ${chosen.amount === "all" ? `everything waiting (${btc(waiting.confirmed)})` : btc(chosen.shown)} until ${when(locktime)}?`,
+      (chosen.amount === "all" ? "The network fee comes out of it. " : "The network fee is paid from what stays waiting. ")
+        + "Until that date it can only leave the lock into a purchase you sign for yourself. After it, you can take it home whenever you like. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Lock it", onPress: async () => {
@@ -519,10 +536,11 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
           try {
             const lock = lockFor({ account, cosignerPubkey: cosigner, locktime });
             const feeRate = await chain.feeRate();
-            const tx = await buildLock({ account, chain, lock, feeRate });
+            const tx = await buildLock({ account, chain, lock, feeRate, amount: chosen.amount });
             // The terms are saved before the money moves, and checked saved.
             await saveLock({ crowdlock: c.url, address: lock.address, locktime, cosignerPubkey: cosigner });
             await chain.broadcast(tx.hex);
+            setAmountText("");
             setMessage({ ok: true, text: `Locked ${btc(tx.sent)} (fee ${btc(tx.fee)}). Once it confirms — usually within the hour — it goes on the register by itself.` });
             await refresh(); onChange();
           } catch (e: any) { setMessage({ ok: false, text: String(e.message ?? e) }); }
@@ -561,6 +579,14 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
       {waiting === null ? <ActivityIndicator /> : (waiting as any).failed ? null : ready ? (
         <View style={s.panel}>
           <Text style={s.p}><Text style={s.bold}>{btc(waiting.confirmed)}</Text> is waiting, enough for a lock that counts.</Text>
+          <Text style={s.label}>How much to lock</Text>
+          <TextInput
+            style={s.input} keyboardType="decimal-pad" placeholder="Everything waiting"
+            value={amountText} onChangeText={setAmountText}
+          />
+          <Text style={chosen.problem ? s.error : s.note}>
+            {chosen.problem ?? `In BTC. Leave it empty to lock everything. At least ${shortBtc(c.crowdlock.minimum_counted_lock_sats)}; whatever you don't lock stays waiting.`}
+          </Text>
           <Text style={s.label}>Lock it for</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {lengths.map((y) => (
@@ -570,7 +596,10 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
             ))}
           </View>
           <Text style={s.note}>Unlocks {when(lockDate(years))}.</Text>
-          <Button label={busy === "lock" ? "Locking…" : `Lock ${btc(waiting.confirmed)}`} disabled={busy !== null} onPress={lockIt} />
+          <Button
+            label={busy === "lock" ? "Locking…" : chosen.amount === "all" ? "Lock everything waiting" : `Lock ${btc(chosen.shown)}`}
+            disabled={busy !== null || !!chosen.problem} onPress={lockIt}
+          />
         </View>
       ) : (
         <Text style={s.p}>
