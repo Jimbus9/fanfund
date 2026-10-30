@@ -8,6 +8,7 @@
 // given doctored copies of them — which it must turn away, with the reason.
 
 import { readFileSync } from "node:fs";
+import { esploraChain } from "../src/wallet/esplora.mjs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister } from "../src/crowdlocks.mjs";
@@ -143,6 +144,15 @@ check("A lock already on the register counts as done", again.ok);
 const early = await submitLock({ lock_endpoint: "https://x" }, { ownerPubkey: "a", cosignerPubkey: "b", locktime: 1, address: "c" },
   async () => Response.json({ error: "there are no confirmed coins at that lock address yet" }, { status: 409 }));
 check("Any other refusal is passed on as it was given", !early.ok && early.error.includes("no confirmed coins"));
+
+// An explorer that never answers: the app must give up and say so, not spin forever.
+const silent = (url, init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+let gaveUp = null;
+try { await esploraChain("https://x", silent, 50).utxos("tb1qme"); } catch (e) { gaveUp = e.message; }
+check("An explorer that never answers is given up on, with a plain reason", /didn't answer/.test(gaveUp ?? ""), gaveUp ?? "IT WAITED FOREVER");
+let unreachable = null;
+try { await esploraChain("https://x", async () => { throw new TypeError("Network request failed"); }, 50).utxos("tb1qme"); } catch (e) { unreachable = e.message; }
+check("One that can't be reached says so too", /couldn't reach/.test(unreachable ?? ""));
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The app's Crowdlock loader accepts the real files and refuses doctored ones." : `${failures} check(s) failed.`);

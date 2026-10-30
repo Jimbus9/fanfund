@@ -491,7 +491,11 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
       }
       out.sort((a, b) => a.locktime - b.locktime);
       setRows(out);
-    } catch (e: any) { setMessage({ ok: false, text: `Could not read the chain: ${e.message ?? e}` }); }
+    } catch (e: any) {
+      setMessage({ ok: false, text: `Could not read your money: ${e.message ?? e}` });
+      setWaiting((w) => w ?? { confirmed: 0n, arriving: 0n, failed: true } as any);
+      setRows((r) => r ?? []);
+    }
   }, [account.address, c]);
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -554,7 +558,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
     <View>
       <Text style={s.h2}>Your locks</Text>
 
-      {waiting === null ? <ActivityIndicator /> : ready ? (
+      {waiting === null ? <ActivityIndicator /> : (waiting as any).failed ? null : ready ? (
         <View style={s.panel}>
           <Text style={s.p}><Text style={s.bold}>{btc(waiting.confirmed)}</Text> is waiting, enough for a lock that counts.</Text>
           <Text style={s.label}>Lock it for</Text>

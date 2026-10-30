@@ -3,7 +3,26 @@
 // key. The key module asks its questions through the object this returns, so
 // it can be pointed at any explorer — including one the fan runs themselves.
 
-export function esploraChain(baseUrl, fetchImpl = globalThis.fetch) {
+// A request the explorer never answers would leave the app spinning forever,
+// so every request gives up after this long and says why.
+export const TIMEOUT_MS = 20000;
+
+function withTimeout(fetchImpl, ms) {
+  return async (url, init = {}) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try { return await fetchImpl(url, { ...init, signal: ctrl.signal }); }
+    catch (e) {
+      if (ctrl.signal.aborted) {
+        throw new Error(`the block explorer didn't answer within ${ms / 1000} seconds — check your connection, or turn off any VPN, and try again`);
+      }
+      throw new Error("couldn't reach the block explorer — check your connection, or turn off any VPN, and try again");
+    } finally { clearTimeout(timer); }
+  };
+}
+
+export function esploraChain(baseUrl, rawFetch = globalThis.fetch, timeoutMs = TIMEOUT_MS) {
+  const fetchImpl = withTimeout(rawFetch, timeoutMs);
   const get = async (path, as = "json") => {
     const res = await fetchImpl(`${baseUrl}${path}`);
     if (!res.ok) throw new Error(`the block explorer answered ${res.status}`);
