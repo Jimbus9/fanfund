@@ -10,6 +10,12 @@
       "address": "tb1qslfryaahfjx7ns38a436f2zzp9rrz3nm4gyd68",
       "signature": "IGFn/hsk9mPgYj3zg2t2UUJ3dzQOnn+/Hxh5+UHhKaZeZkHniZe5aO5GJAh96e1qjPxnVNxkJ9dihKqGaDW57ak=",
       "signed": "2026-10-29"
+    },
+    {
+      "n": 2,
+      "address": "tb1qcdvch25flrw98run3ga0acy58ln3fsgjadkhpr",
+      "signature": "H5tnfCfa2Isy0sXeyx8F7TGLH/u+4zj4UhY9BhviR9cVdahgp+Q1ue3LwGB58mOY9HbPrEzLvfPHVTJA5kaLl7I=",
+      "signed": "2026-10-30"
     }
   ],
   "locks": [
