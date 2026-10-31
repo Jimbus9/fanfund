@@ -1,0 +1,24 @@
+{
+  "kop-fund-testnet4.json": {
+    "wss://relay.damus.io": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://nos.lol": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://relay.primal.net": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://nostr.mom": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://offchain.pub": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    }
+  }
+}
