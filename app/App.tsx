@@ -399,11 +399,11 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
     setBusy(true); setResult(null);
     const signature = signStatement(account, c.statement);
     // A Crowdlock that names relays takes its members from there: posted
-    // publicly, collected by its own repository within about half an hour.
+    // publicly, collected by its own repository within a few minutes.
     if (Array.isArray(c.crowdlock.relays)) {
       const p = await postToRelays(c.crowdlock, { type: "join", address: account.address, signature });
       setResult(p.ok
-        ? { ok: true, text: `Signed and posted to ${p.accepted} of ${p.total} relays. You'll be on the register within about half an hour — open this page again then.` }
+        ? { ok: true, text: `Signed and posted to ${p.accepted} of ${p.total} relays. You'll be on the register within a few minutes — open this page again then.` }
         : { ok: false, text: "No relay took it just now — your signature is fine. Check your connection, or turn off any VPN, and try again." });
       setBusy(false);
       return;
@@ -494,11 +494,11 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   const publish = useCallback(async (l: LockTerms): Promise<{ ok: boolean; note: string }> => {
     const terms = { ownerPubkey: account.publicKey, ...l };
     if (viaRelays) {
-      if (posted.current.has(l.address)) return { ok: true, note: "Posted to the relays — on the register within about half an hour." };
+      if (posted.current.has(l.address)) return { ok: true, note: "Posted to the relays — on the register within a few minutes." };
       const p = await postToRelays(c.crowdlock, { type: "lock", owner_pubkey: account.publicKey, cosigner_pubkey: l.cosignerPubkey, locktime: l.locktime, address: l.address });
       if (p.ok) posted.current.add(l.address);
       return p.ok
-        ? { ok: true, note: `Posted to ${p.accepted} of ${p.total} relays — on the register within about half an hour.` }
+        ? { ok: true, note: `Posted to ${p.accepted} of ${p.total} relays — on the register within a few minutes.` }
         : { ok: false, note: "Not on the register yet: no relay answered. It will be tried again when you open this page." };
     }
     const r = await submitLock(c.crowdlock, terms);

@@ -196,9 +196,14 @@
   <p><a href="https://github.com/Jimbus9/fanfund/issues">Questions and corrections</a> · <a href="https://github.com/Jimbus9/fanfund">Source and documents on GitHub</a></p>
 </footer>
 
+<!-- nostr-tools 2.25.2, the standard Nostr library (public domain), as its own
+     ready-built browser file: it signs the message that carries a registration
+     to the relays, so this page writes none of that itself. -->
+<script src="../js/vendor/nostr-tools-2.25.2.bundle.js"></script>
 <script type="module">
 import { verifyMembership } from "../js/verify.mjs";
 import { membershipStatement } from "../js/crowdlock.mjs";
+import { recordEventTemplate } from "../js/inbox.mjs";
 
 const el = (id) => document.getElementById(id);
 
@@ -289,6 +294,8 @@ function drawWallets() {
 
 let STATEMENT = null;
 let ENDPOINT = null;   // this Crowdlock's join endpoint, from its own file; may be absent
+let RELAYS = null;     // this Crowdlock's Nostr relays, from its own file; preferred when present
+let FINGERPRINT = null;
 
 async function loadCrowdlock() {
   try {
@@ -297,6 +304,8 @@ async function loadCrowdlock() {
     const c = await (await fetch(`../crowdlocks/${name}.json`)).json();
     STATEMENT = membershipStatement(c);
     ENDPOINT = typeof c.join_endpoint === "string" && /^https:\/\//.test(c.join_endpoint) ? c.join_endpoint : null;
+    RELAYS = Array.isArray(c.relays) && c.relays.length ? c.relays : null;
+    FINGERPRINT = c.declaration.sha256;
     el("statement").textContent = STATEMENT;
     el("paramStatus").innerHTML =
       `Signing <strong>${c.declaration.title} v${c.declaration.version}</strong> ` +
@@ -371,10 +380,47 @@ function joinOutcome(kind, head, body) {
   box.innerHTML = `<b>${head}</b><p>${body}</p>`;
 }
 
+// A Crowdlock that names Nostr relays takes registrations from there: the
+// signed record is posted publicly, and the Crowdlock's own repository collects
+// and checks it every two minutes. No endpoint, account or key is in the path,
+// and anybody can see the post was made.
+async function postToRelays(record) {
+  const { finalizeEvent, generateSecretKey, Relay } = globalThis.NostrTools;
+  const event = finalizeEvent(recordEventTemplate(record, FINGERPRINT, Math.floor(Date.now() / 1000)), generateSecretKey());
+  const limit = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("no answer")), 12000))]);
+  const results = await Promise.all(RELAYS.map(async (url) => {
+    let relay;
+    try { relay = await limit(Relay.connect(url)); await limit(relay.publish(event)); return true; }
+    catch { return false; }
+    finally { try { relay?.close(); } catch {} }
+  }));
+  return { accepted: results.filter(Boolean).length, total: RELAYS.length };
+}
+
 el("joinNow").addEventListener("click", async () => {
   const btn = el("joinNow");
   const address = el("addr").value.trim();
   const signature = el("sig").value.trim();
+
+  if (RELAYS && globalThis.NostrTools) {
+    btn.disabled = true;
+    btn.textContent = "Posting…";
+    joinOutcome("", "Posting", "Sending your signed registration to the relays…");
+    const p = await postToRelays({ type: "join", address, signature });
+    if (p.accepted > 0) {
+      btn.textContent = "Posted";
+      joinOutcome("ok", "Posted — you'll be on the register in a few minutes",
+        `${p.accepted} of ${p.total} relays took it. The register collects new registrations every two minutes; `
+        + `open <a href="../register/">the register</a> in a few minutes and you'll be there, with your signature `
+        + `checked by your own browser like everybody else's.`);
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = "Add me to the register";
+    joinOutcome("bad", "No relay took it just now",
+      "Your signature is fine. Check your connection, or turn off any VPN, and try again — or use either of the routes below; they count exactly the same.");
+    return;
+  }
 
   if (!ENDPOINT) {
     joinOutcome("bad", "No register button for this Crowdlock",
