@@ -23,8 +23,8 @@
   },
   "kop-fund.json": {
     "wss://relay.damus.io": {
-      "lastAnswered": null,
-      "silentSince": "2026-10-31"
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
     },
     "wss://nos.lol": {
       "lastAnswered": "2026-10-31",
