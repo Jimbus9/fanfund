@@ -8,7 +8,7 @@
 // line per record, so the job's log is a public account of what was taken
 // and what was refused, and why.
 
-import { readFileSync, writeFileSync, readdirSync, appendFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applyRecords } from "../js/inbox.mjs";
@@ -57,6 +57,4 @@ for (const file of readdirSync(join(ROOT, "crowdlocks")).filter((f) => f.endsWit
 }
 
 // The workflow uses this as the commit message, if anything changed.
-if (process.env.GITHUB_OUTPUT) {
-  appendFileSync(process.env.GITHUB_OUTPUT, `message=${messages.length ? messages.join(", ") : "No new records"}\n`);
-}
+if (messages.length) writeFileSync(join(ROOT, "relay", ".message"), messages.join(", "));

@@ -1,6 +1,6 @@
-# The relay inbox: every few minutes, collect registrations and locks posted to
+# The relay inbox: every two minutes, collect registrations and locks posted to
 # the Nostr relays a Crowdlock names, add the valid ones to its register, and
-# republish the site.. Uses no secrets: only the permission GitHub gives every
+# republish the site. Uses no secrets: only the permission GitHub gives every
 # repository's own jobs to write to that repository.
 #
 # Run it by hand from the Actions tab ("Run workflow"); tick "selftest" to first
@@ -9,8 +9,12 @@
 name: Relay inbox
 
 on:
+  # A backstop only. GitHub runs schedules late or not at all (one run in three
+  # hours, the first night), so each run keeps the inbox going itself — see
+  # the last step — and this restarts the chain within the hour if it breaks.
+  # An odd minute, away from the top of the hour when GitHub is busiest.
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       selftest:
@@ -21,8 +25,10 @@ on:
 permissions:
   contents: write
   pages: write
+  actions: write   # only to start the next run of this same job
 
-# Never two runs at once: each reads the register, then writes it.
+# Never two runs at once: each reads the register, then writes it. A run that
+# arrives while one is going waits its turn.
 concurrency:
   group: relay-inbox
   cancel-in-progress: false
@@ -30,7 +36,7 @@ concurrency:
 jobs:
   inbox:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,34 +52,39 @@ jobs:
         working-directory: relay
         run: node selftest.mjs kop-fund-testnet4 && sleep 20
 
-      - name: Collect records from the relays
-        id: inbox
-        working-directory: relay
-        run: node inbox.mjs
-
-      - name: Commit the register if anything was added
-        id: commit
-        env:
-          MESSAGE: ${{ steps.inbox.outputs.message }}
-        run: |
-          if git diff --quiet -- crowdlocks registrations.json; then
-            echo "Nothing new."
-            exit 0
-          fi
-          git config user.name "Crowdlock relay inbox"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crowdlocks registrations.json
-          git commit -m "$MESSAGE"
-          # The join and lock endpoints write to the same files; if one did
-          # meanwhile, take theirs and put ours on top.
-          for i in 1 2 3; do
-            git pull --rebase -q && git push -q && echo "pushed=yes" >> "$GITHUB_OUTPUT" && exit 0
-            sleep 5
-          done
-          exit 1
-
-      - name: Republish the site
-        if: steps.commit.outputs.pushed == 'yes'
+      # About fifty minutes of checking the relays every two minutes. Each pass
+      # takes the latest register first (the endpoints write to it too), adds
+      # whatever is new and valid, commits, and asks for the site to be
+      # republished.
+      - name: Collect records from the relays, every two minutes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "Could not request a site rebuild; the next push will do it."
+        run: |
+          git config user.name "Crowdlock relay inbox"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for pass in $(seq 1 24); do
+            git pull --rebase -q || true
+            (cd relay && node inbox.mjs) || echo "This pass failed; trying again next pass."
+            if ! git diff --quiet -- crowdlocks registrations.json; then
+              git add crowdlocks registrations.json
+              git commit -q -m "$(cat relay/.message 2>/dev/null || echo 'Records via relays')"
+              pushed=no
+              for i in 1 2 3; do
+                if git pull --rebase -q && git push -q; then pushed=yes; break; fi
+                sleep 5
+              done
+              if [ "$pushed" = yes ]; then
+                gh api -X POST "repos/${{ github.repository }}/pages/builds" > /dev/null || echo "Could not request a site rebuild."
+              fi
+            fi
+            rm -f relay/.message
+            if [ "$pass" -lt 24 ]; then sleep 110; fi
+          done
+
+      # Start the next run, so the inbox never depends on GitHub's schedule.
+      # GitHub lets a job's own token start a run this way and no other way.
+      - name: Start the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/actions/workflows/relay-inbox.yml/dispatches" -f ref="${{ github.ref_name }}" -F 'inputs[selftest]=false'
