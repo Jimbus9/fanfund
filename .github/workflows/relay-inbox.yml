@@ -1,6 +1,6 @@
 # The relay inbox: every few minutes, collect registrations and locks posted to
 # the Nostr relays a Crowdlock names, add the valid ones to its register, and
-# republish the site. Uses no secrets: only the permission GitHub gives every
+# republish the site.. Uses no secrets: only the permission GitHub gives every
 # repository's own jobs to write to that repository.
 #
 # Run it by hand from the Actions tab ("Run workflow"); tick "selftest" to first
