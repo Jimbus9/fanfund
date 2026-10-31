@@ -12,6 +12,7 @@ import { messageHash, memberAddressForOwnerKey } from "../js/verify.mjs";
 import { membershipStatement, checkCrowdlock } from "../js/crowdlock.mjs";
 import { lockAddress } from "../js/lockrecord.mjs";
 import { applyRecords, recordEventTemplate, recordFromEvent, RECORD_KIND } from "../js/inbox.mjs";
+import { recordPass, planSwaps } from "../js/relayhealth.mjs";
 
 const ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), "..");
 let failures = 0;
@@ -91,6 +92,30 @@ r = await applyRecords(register, [post(strangerLock)], { crowdlock, statement, n
 check("A lock whose owner never joined is refused", !r.outcome[0].added, r.outcome[0].reason.slice(0, 40));
 r = await applyRecords(register, [events[0], post(lockRec)], { crowdlock, statement, now, today, confirmedSats: async () => { throw new Error("down"); } });
 check("If the chain can't be read, the lock waits for the next run", !r.outcome.find((o) => o.type === "lock").added);
+
+// ---- Relay health ----
+const A = "wss://a.example", B = "wss://b.example", S1 = "wss://spare1.example", S2 = "wss://spare2.example";
+let h = recordPass({}, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-01");
+check("Health records the day each relay last answered", h[A].lastAnswered === "2026-11-01" && h[B].silentSince === null);
+check("The same day again changes nothing, so there is nothing to commit",
+  recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-01") === h);
+check("A pass where no relay answers says nothing about the relays",
+  recordPass(h, [{ relay: A, ok: false }, { relay: B, ok: false }], "2026-11-02") === h);
+h = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: false }], "2026-11-02");
+check("A relay that stops answering is marked silent from that day", h[B].silentSince === "2026-11-02" && h[B].lastAnswered === "2026-11-01");
+h = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: false }], "2026-11-05");
+check("…and stays silent from its first silent day", h[B].silentSince === "2026-11-02");
+const cl = { ...crowdlock, relays: [A, B], spare_relays: [S1, S2] };
+check("Six days silent: not swapped yet", planSwaps(cl, h, "2026-11-08").swaps.length === 0);
+const sw = planSwaps(cl, h, "2026-11-09");
+check("Seven days silent: swapped for the first spare, in its place",
+  sw.swaps.length === 1 && sw.crowdlock.relays[1] === S1 && sw.crowdlock.spare_relays.length === 1 && sw.crowdlock.spare_relays[0] === S2);
+check("…and the swapped Crowdlock file still checks out", checkCrowdlock(sw.crowdlock).problems.every((p) => !/relay/.test(p)));
+const back = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-06");
+check("A relay that comes back before the seventh day is not swapped", back[B].silentSince === null && planSwaps(cl, back, "2026-11-20").swaps.length === 0);
+const noSpare = planSwaps({ ...cl, spare_relays: [] }, h, "2026-11-20");
+check("With no spare left it is reported, not removed", noSpare.swaps.length === 0 && noSpare.stuck[0] === B);
+check("A relay listed as both live and spare is refused", !checkCrowdlock({ ...cl, spare_relays: [A] }).ok);
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The relay inbox takes in valid records and only those." : `${failures} check(s) failed.`);

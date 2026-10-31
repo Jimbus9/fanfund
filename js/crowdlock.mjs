@@ -126,6 +126,18 @@ export function checkCrowdlock(c, { declarationText } = {}) {
       && c.relays.every((r) => typeof r === "string" && /^wss:\/\/[^\s]+$/.test(r) && r.length <= 200),
       "relays, if given, must be a list of up to 10 wss:// addresses");
   }
+  // Optional, published in advance: relays that replace a live one which has
+  // been silent for 7 days (relay/inbox.mjs). Chosen now, in public, so nobody
+  // picks a relay on the day.
+  if (c.spare_relays !== undefined) {
+    need(Array.isArray(c.relays), "spare_relays needs relays");
+    need(Array.isArray(c.spare_relays) && c.spare_relays.length <= 10
+      && c.spare_relays.every((r) => typeof r === "string" && /^wss:\/\/[^\s]+$/.test(r) && r.length <= 200),
+      "spare_relays, if given, must be a list of up to 10 wss:// addresses");
+    if (Array.isArray(c.relays) && Array.isArray(c.spare_relays)) {
+      need(!c.spare_relays.some((r) => c.relays.includes(r)), "a relay is listed as both live and spare");
+    }
+  }
 
   return { ok: problems.length === 0, problems };
 }

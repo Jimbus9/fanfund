@@ -65,8 +65,8 @@ jobs:
           for pass in $(seq 1 24); do
             git pull --rebase -q || true
             (cd relay && node inbox.mjs) || echo "This pass failed; trying again next pass."
-            if ! git diff --quiet -- crowdlocks registrations.json; then
-              git add crowdlocks registrations.json
+            if [ -n "$(git status --porcelain -- crowdlocks registrations.json relay/health.json)" ]; then
+              git add crowdlocks registrations.json relay/health.json
               git commit -q -m "$(cat relay/.message 2>/dev/null || echo 'Records via relays')"
               pushed=no
               for i in 1 2 3; do

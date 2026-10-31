@@ -39,5 +39,10 @@
     "wss://relay.primal.net",
     "wss://nostr.mom",
     "wss://offchain.pub"
+  ],
+  "spare_relays": [
+    "wss://relay.snort.social",
+    "wss://nostr-pub.wellorder.net",
+    "wss://relay.nostr.bg"
   ]
 }
