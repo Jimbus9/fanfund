@@ -9,6 +9,9 @@
 //                 member, Your locks: progress to the minimum, Lock it,
 //                 each lock's state, and Take it home after its date
 //   Add        →  any other Crowdlock, by link, checked the same way
+//   Start      →  a new Crowdlock: write its declaration, sign in to GitHub
+//                 with a short code, and it is set up in the founder's own
+//                 account, with a test copy beside it
 //
 // Every screen here is presentation. Anything touching keys or money goes
 // through src/wallet/core.mjs, and nothing else may.
@@ -23,8 +26,15 @@ import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement,
-  lockFor, lockDate, buildLock, lockState, takeHome, relock,
+  lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords,
 } from "./src/wallet/core.mjs";
+// @ts-ignore — plain modules shared with the tests
+import { buildCrowdlock, declarationSkeleton, slugify } from "./src/start.mjs";
+// @ts-ignore
+import { startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo } from "./src/github.mjs";
+// Plain JavaScript modules: their results are used as loosely typed here.
+const build = buildCrowdlock as (x: any) => any;
+const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
@@ -47,7 +57,8 @@ type Screen =
   | { name: "home"; words: string }
   | { name: "send"; words: string }
   | { name: "crowdlock"; words: string; url: string }
-  | { name: "addCrowdlock"; words: string };
+  | { name: "addCrowdlock"; words: string }
+  | { name: "startCrowdlock"; words: string };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
@@ -71,6 +82,7 @@ export default function App() {
           {screen.name === "send" && <Send words={screen.words} go={setScreen} />}
           {screen.name === "crowdlock" && <CrowdlockScreen words={screen.words} url={screen.url} go={setScreen} />}
           {screen.name === "addCrowdlock" && <AddCrowdlock words={screen.words} go={setScreen} />}
+          {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -233,6 +245,7 @@ function Home({ words, go }: { words: string; go: Go }) {
       <Text style={s.h2}>Crowdlocks</Text>
       <CrowdlockList words={words} address={account.address} go={go} />
       <Button label="Add a Crowdlock" kind="plain" onPress={() => go({ name: "addCrowdlock", words })} />
+      <Button label="Start a Crowdlock" kind="plain" onPress={() => go({ name: "startCrowdlock", words })} />
       <Button label="Remove wallet from this phone" kind="danger" onPress={remove} />
     </View>
   );
@@ -767,6 +780,155 @@ function AddCrowdlock({ words, go }: { words: string; go: Go }) {
       <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} placeholder="https://…/crowdlocks/name.json" value={link} onChangeText={(t) => { setLink(t); setProblems(null); }} />
       {problems && <><Text style={s.error}>Refused:</Text>{problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}</>}
       <Button label={busy ? "Checking…" : "Check and add"} disabled={busy || !link} onPress={add} />
+      <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Starting a Crowdlock
+// ---------------------------------------------------------------------------
+
+function StartCrowdlock({ words, go }: { words: string; go: Go }) {
+  const [network, setNetwork] = useState<"testnet4" | "mainnet">("testnet4");
+  const [name, setName] = useState("");
+  const [about, setAbout] = useState("");
+  const [title, setTitle] = useState("OUR DECLARATION");
+  const [text, setText] = useState(declarationSkeleton("OUR DECLARATION"));
+  const [minimum, setMinimum] = useState("0.002");
+  const [cosigner, setCosigner] = useState("");
+  const [problems, setProblems] = useState<string[] | null>(null);
+  const [checked, setChecked] = useState<any>(null);
+  const [stage, setStage] = useState<"form" | "signin" | "creating" | "done">("form");
+  const [code, setCode] = useState<{ userCode: string; verificationUri: string } | null>(null);
+  const [steps, setSteps] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<{ links: { label: string; url: string }[]; repoUrl: string; inboxStarted: boolean } | null>(null);
+
+  // The test copy's co-signer key is made here, from the founder's own words,
+  // on a path of its own. The real one is pasted in from wherever it lives.
+  const testCo = useMemo(() => cosignerFromWords(words, "testnet4").publicKey, [words]);
+
+  const input = (siteBase: string) => {
+    const t = minimum.trim().replace(",", ".");
+    const [w, f = ""] = t.split(".");
+    const minimumSats = /^\d*\.?\d{0,8}$/.test(t) && t !== "" ? Number(BigInt(w || "0") * 100000000n + BigInt((f + "00000000").slice(0, 8))) : NaN;
+    return {
+      name, about, title, declarationText: text, network, minimumSats,
+      cosignerPubkey: cosigner.trim().toLowerCase(), testCosignerPubkey: testCo,
+      siteBase, today: new Date().toISOString().slice(0, 10),
+    };
+  };
+
+  const check = () => {
+    const r = build(input("https://example.github.io/check/"));
+    setProblems(r.ok ? null : r.problems);
+    setChecked(r.ok ? r : null);
+  };
+
+  const create = async () => {
+    setError(null); setStage("signin"); setSteps([]);
+    try {
+      const c = await startSignIn();
+      setCode({ userCode: c.userCode, verificationUri: c.verificationUri });
+      const token = await waitForSignIn(c);
+      setStage("creating");
+      // A free repository name: the Crowdlock's own, or with a number after it.
+      let repoName = slugify(name), n = 1;
+      while ((await whoAmI(token, repoName)).taken) repoName = `${slugify(name).slice(0, 36)}-${++n}`;
+      const me = await whoAmI(token, repoName);
+      const built = build(input(`https://${me.login.toLowerCase()}.github.io/${repoName}/`));
+      if (!built.ok) throw new Error(built.problems.join(" "));
+      const made = await createRepo({ token, repoName, description: about.trim(), files: built.files, progress: (st: string) => setSteps((x) => [...x, st]) });
+      // Add it to this phone's list, the same as a Crowdlock added by link.
+      const added = await loadAddedCrowdlocks();
+      await saveAddedCrowdlocks([...added, ...built.links.map((l: any) => l.url).filter((u: string) => !added.includes(u))]);
+      setDone({ links: built.links, repoUrl: made.repoUrl, inboxStarted: made.inboxStarted });
+      setStage("done");
+    } catch (e: any) { setError(String(e.message ?? e)); setStage("form"); setCode(null); }
+  };
+
+  if (stage === "signin" || stage === "creating") return (
+    <View>
+      <Text style={s.h1}>{stage === "signin" ? "Sign in to GitHub" : "Setting it up"}</Text>
+      {stage === "signin" && !code && <ActivityIndicator style={{ marginVertical: 20 }} />}
+      {stage === "signin" && code && <>
+        <Text style={s.p}>Your Crowdlock is set up in your own GitHub account, so you own it. Open GitHub, sign in, and type this code:</Text>
+        <Text style={[s.big, { textAlign: "center", letterSpacing: 2, marginVertical: 12 }]} selectable>{code.userCode}</Text>
+        <Button label="Copy the code" kind="plain" onPress={() => Clipboard.setStringAsync(code.userCode)} />
+        <Button label="Open GitHub" onPress={() => Linking.openURL(code.verificationUri)} />
+        <Text style={s.note}>GitHub will ask whether to allow "Crowdlock" to create a public repository in your account. Come back here once you've allowed it — this screen carries on by itself. No account? Sign up on GitHub first; it's free.</Text>
+      </>}
+      {stage === "creating" && <>
+        {steps.map((st, i) => <Text key={i} style={i === steps.length - 1 ? s.p : s.good}>{i === steps.length - 1 ? "…" : "✓"} {st}</Text>)}
+        <ActivityIndicator style={{ marginVertical: 12 }} />
+      </>}
+    </View>
+  );
+
+  if (stage === "done" && done) return (
+    <View>
+      <Text style={s.h1}>It's started</Text>
+      <Text style={s.p}>Your Crowdlock is in your own GitHub account. Its website goes live in about two minutes; it's already in your Crowdlocks list and will open once it is.</Text>
+      {done.links.map((l) => (
+        <View key={l.url} style={s.card}>
+          <Text style={s.cardTitle}>{l.label}</Text>
+          <Text style={s.note}>Anyone joins by adding this link in the app:</Text>
+          <Text style={s.mono} selectable>{l.url}</Text>
+          <Button label="Copy the link" kind="plain" onPress={() => Clipboard.setStringAsync(l.url)} />
+        </View>
+      ))}
+      <Text style={s.note}>Your repository: {done.repoUrl}</Text>
+      {!done.inboxStarted && <Text style={s.note}>Its relay inbox will start by itself within the hour.</Text>}
+      <Text style={s.note}>Next: open it from your Crowdlocks list and sign your own declaration, so you're its member 1.</Text>
+      <Button label="Back to wallet" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+
+  return (
+    <View>
+      <Text style={s.h1}>Start a Crowdlock</Text>
+      <Text style={s.p}>A Crowdlock lets a crowd commit money to buying something together, without anyone pooling it or holding anyone else's. You write what it's for; the app sets it up in your own GitHub account.</Text>
+
+      <Text style={s.label}>Money</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {([["testnet4", "Test bitcoin only"], ["mainnet", "Real bitcoin, with a test copy"]] as const).map(([k, label]) => (
+          <Pressable key={k} onPress={() => { setNetwork(k); setChecked(null); }} style={[s.chip, network === k && s.chipOn]}>
+            <Text style={[s.chipText, network === k && { color: "#fff" }]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={s.label}>Name</Text>
+      <TextInput style={s.input} value={name} onChangeText={(t) => { setName(t); setChecked(null); }} placeholder="The Pub Fund" />
+      <Text style={s.label}>What it's for, in one sentence</Text>
+      <TextInput style={s.input} value={about} onChangeText={(t) => { setAbout(t); setChecked(null); }} placeholder="Regulars buying the Red Lion so it stays a pub for good." />
+      <Text style={s.label}>The declaration's title</Text>
+      <TextInput style={s.input} value={title} autoCapitalize="characters" onChangeText={(t) => {
+        // Keep the declaration's first line in step with its title while it still matches.
+        setText((old) => old.startsWith(title.toUpperCase() + "\n") ? t.toUpperCase() + old.slice(title.length) : old);
+        setTitle(t); setChecked(null);
+      }} />
+      <Text style={s.label}>The declaration — what people sign</Text>
+      <Text style={s.note}>Replace the bracketed part with what you're raising money for. Keep the no-returns line exactly as it is: it's the one rule every Crowdlock shares. Once anyone signs, these words can never change.</Text>
+      <TextInput style={[s.input, { minHeight: 240, textAlignVertical: "top" }]} multiline value={text} onChangeText={(t) => { setText(t); setChecked(null); }} />
+
+      {network === "mainnet" ? <>
+        <Text style={s.label}>Minimum lock that counts, in BTC</Text>
+        <TextInput style={s.input} keyboardType="decimal-pad" value={minimum} onChangeText={(t) => { setMinimum(t); setChecked(null); }} />
+        <Text style={s.label}>Co-signer's public key</Text>
+        <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={cosigner} onChangeText={(t) => { setCosigner(t); setChecked(null); }} placeholder="02… or 03…, 66 characters" />
+        <Text style={s.note}>The co-signer can't take or keep anyone's money — only refuse to complete a purchase. For real bitcoin, make this key somewhere safe and paste its public half here. The test copy gets a key made on this phone.</Text>
+      </> : <Text style={s.note}>Test bitcoin has no value: practise everything — joining, locking, taking a lock home — before anything is real. Its co-signer key is made on this phone from your backup words.</Text>}
+
+      {problems && problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}
+      {error && <Text style={s.error}>{error}</Text>}
+      {!checked && <Button label="Check it" onPress={check} />}
+      {checked && <View style={s.panel}>
+        <Text style={s.good}>It checks out — the same checks every Crowdlock passes.</Text>
+        {checked.fingerprints.map((f: any) => <Text key={f.slug} style={s.note}>{f.network === "mainnet" ? "Real" : "Test copy"} · fingerprint {f.sha256.slice(0, 12)}…</Text>)}
+        <Button label="Sign in to GitHub and create it" onPress={create} />
+      </View>}
       <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
     </View>
   );

@@ -14,7 +14,10 @@ name: App
 on:
   push:
     branches: [main]
-    paths: ["app/**", ".github/workflows/app.yml"]
+    # The inbox code too: the app carries a copy of it for founders' new
+    # Crowdlocks, and the build fails if that copy has fallen out of date.
+    # (relay/health.json is left out — the inbox writes it daily.)
+    paths: ["app/**", ".github/workflows/app.yml", "js/*.mjs", "js/vendor/**", "relay/*.mjs", "relay/package*.json"]
   workflow_dispatch:
 
 permissions:

@@ -107,6 +107,21 @@ export function accountFromWords(text, network = "mainnet") {
   };
 }
 
+/**
+ * A co-signer key for a Crowdlock this wallet starts, from the same backup
+ * words but on its own path (m/84'/coin'/7713'/0/0), so it is never the
+ * member key and never an address another wallet would show by accident.
+ * Only its public half is published; signing with it comes at milestone 5.
+ */
+export function cosignerFromWords(text, network = "mainnet") {
+  const words = tidyWords(text);
+  if (!wordsAreValid(words)) throw new Error("those are not valid backup words");
+  const { network: net, coin } = typeof network === "string" ? NETWORKS[network] : network;
+  const root = BIP32.fromSeed(mnemonicToSeedSync(words), net);
+  const path = `m/84'/${coin}'/7713'/0/0`;
+  return { path, publicKey: toHex(root.derivePath(path).publicKey) };
+}
+
 // ---------------------------------------------------------------------------
 // What the chain says
 // ---------------------------------------------------------------------------
