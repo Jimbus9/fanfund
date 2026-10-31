@@ -20,5 +20,27 @@
       "lastAnswered": "2026-10-31",
       "silentSince": null
     }
+  },
+  "kop-fund.json": {
+    "wss://relay.damus.io": {
+      "lastAnswered": null,
+      "silentSince": "2026-10-31"
+    },
+    "wss://nos.lol": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://relay.primal.net": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://nostr.mom": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    },
+    "wss://offchain.pub": {
+      "lastAnswered": "2026-10-31",
+      "silentSince": null
+    }
   }
 }
