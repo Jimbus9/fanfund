@@ -45,6 +45,15 @@
       "locktime": 1793516711,
       "unlocks": "2026-11-01",
       "submitted": "2026-11-01"
+    },
+    {
+      "address": "tb1qluqzxq5ke3lj4pn8hzppvktxf7h09vvejgc66ml5kgr9l6x5wj3que8r8y",
+      "member": "tb1qslfryaahfjx7ns38a436f2zzp9rrz3nm4gyd68",
+      "owner_pubkey": "021ddaa5fec043760645ed615b8e9ef229766d8c09ddc8cf6f461cfc511f49aee2",
+      "cosigner_pubkey": "020818f8a38dd1bb06a79af42d1cb98f466cddcbed39905379daa9a5bbf1103605",
+      "locktime": 1793664000,
+      "unlocks": "2026-11-03",
+      "submitted": "2026-11-01"
     }
   ]
 }
