@@ -213,9 +213,6 @@ await rpc("generatetoaddress", [1, miner.address]);
 check("A one-year lock unlocks on a plain date, a year or so away",
   lockDate(1, 1800000000) % 86400 === 0 && lockDate(1, 1800000000) - 1800000000 >= 365 * 86400);
 check("A test length under a day is not rounded", lockDate(1 / 8766, 1800000000) === 1800000000 + Math.ceil(3600));
-check("When the network's clock runs ahead of the phone (testnet4), a lock counts from the network's",
-  lockDate(1 / 8766, 1800000000, 1800007200) === 1800007200 + 3600);
-check("When it runs behind (real bitcoin), nothing changes", lockDate(1, 1800000000, 1799996400) === lockDate(1, 1800000000));
 
 await refuses("A lock whose co-signer is the fan's own key",
   async () => lockFor({ account: saver, cosignerPubkey: saver.publicKey, locktime: 1900000000 }), "your own key");

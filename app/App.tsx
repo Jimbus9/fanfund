@@ -531,8 +531,6 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   const minimum = BigInt(c.crowdlock.minimum_counted_lock_sats);
   const lengths: number[] = c.crowdlock.lock_lengths_years;
   const [waiting, setWaiting] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
-  // The network's own clock, which lock dates are judged by; counted from if it is ahead.
-  const [chainTime, setChainTime] = useState(0);
   const [rows, setRows] = useState<LockRow[] | null>(null);
   const [years, setYears] = useState<number>(lengths[0]);
   // Empty means everything waiting; otherwise an amount in BTC.
@@ -567,7 +565,6 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
     try {
       setWaiting(await waitingBalance(chain, account.address));
       const medianTime = await chain.medianTime();
-      setChainTime(medianTime);
       const onReg = locksOnRegister(c.register, account.address) as LockTerms[];
       const saved = (await loadSavedLocks()).filter((l) => l.crowdlock === c.url);
       const all: LockTerms[] = [...onReg];
@@ -617,7 +614,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
 
   const lockIt = () => {
     if (!waiting || chosen.problem) return;
-    const locktime = lockDate(years, undefined, chainTime);
+    const locktime = lockDate(years);
     Alert.alert(
       `Lock ${chosen.amount === "all" ? `everything waiting (${btc(waiting.confirmed)})` : btc(chosen.shown)} until ${when(locktime)}?`,
       (chosen.amount === "all" ? "The network fee comes out of it. " : "The network fee is paid from what stays waiting. ")
@@ -666,7 +663,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
 
   const lockAgain = (row: LockRow) => {
     if (!cosigner) return;
-    const locktime = lockDate(renewYears, undefined, chainTime);
+    const locktime = lockDate(renewYears);
     const extra = addWaiting && waiting ? waiting.confirmed : 0n;
     Alert.alert(
       `Lock ${btc(row.confirmed + extra)} again until ${when(locktime)}?`,
@@ -720,7 +717,8 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
               </Pressable>
             ))}
           </View>
-          <Text style={s.note}>Unlocks {when(lockDate(years, undefined, chainTime))}.</Text>
+          <Text style={s.note}>Unlocks {when(lockDate(years))}.</Text>
+          {lengths.some((y) => y < 1) && <Text style={s.note}>The test network's clock can run ahead of real time, so a short test lock may unlock early. Real bitcoin's never does.</Text>}
           <Button
             label={busy === "lock" ? "Locking…" : chosen.amount === "all" ? "Lock everything waiting" : `Lock ${btc(chosen.shown)}`}
             disabled={busy !== null || !!chosen.problem} onPress={lockIt}
@@ -766,7 +764,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
                 <Text style={[s.p, { marginBottom: 0, flex: 1 }]}>Add the {btc(waiting.confirmed)} waiting too</Text>
               </Pressable>
             )}
-            <Text style={s.note}>New date: {when(lockDate(renewYears, undefined, chainTime))}.</Text>
+            <Text style={s.note}>New date: {when(lockDate(renewYears))}.</Text>
             <Button
               label={busy === r.address ? "Locking…" : `Lock ${btc(r.confirmed + (addWaiting && waiting ? waiting.confirmed : 0n))} again`}
               disabled={busy !== null} onPress={() => lockAgain(r)}
