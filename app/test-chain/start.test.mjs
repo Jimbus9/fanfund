@@ -8,7 +8,9 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { buildCrowdlock, declarationSkeleton, NO_RETURNS, slugify } from "../src/start.mjs";
-import { startSignIn, waitForSignIn, createCrowdlockRepo, CLIENT_ID, SCOPES } from "../src/github.mjs";
+import { startSignIn, waitForSignIn, createCrowdlockRepo, CLIENT_ID, SCOPES, canWrite, updateCrowdlockRepo, addMaintainer } from "../src/github.mjs";
+import { repoFromFileUrl, versionStatus, changesSince } from "../src/crowdlocks.mjs";
+import template from "../src/template.mjs";
 import { loadCrowdlock } from "../src/crowdlocks.mjs";
 import { accountFromWords, cosignerFromWords, newWords, signStatement } from "../src/wallet/core.mjs";
 
@@ -121,6 +123,46 @@ check("Every file goes in, in one commit on top of GitHub's first",
 check("Its site is switched on and its inbox started, retrying while the job registers",
   calls.some((c) => c.endsWith("/pages")) && made.inboxStarted && calls.filter((c) => c.endsWith("/dispatches")).length === 2);
 check("The founder is told each step", steps.length === 4, steps.join(" → "));
+
+rule("LOOKING AFTER IT: UPDATES AND MAINTAINERS");
+check("The repository is read from a GitHub Pages link", JSON.stringify(repoFromFileUrl(real.links[0].url)) === JSON.stringify({ owner: "somefan", repo: "the-pub-fund" })
+  && repoFromFileUrl("https://example.org/c.json") === null);
+check("A new Crowdlock publishes the version it runs", files["relay/VERSION"] === template.version + "\n");
+check("Up to date, behind, made before versions, the source, or not the app's",
+  versionStatus(template.version, template.version, true) === "current" && versionStatus("2026-10-31", template.version, true) === "behind"
+    && versionStatus(null, template.version, true) === "behind" && versionStatus("source\n", template.version, true) === "source"
+    && versionStatus(null, template.version, false) === "unknown");
+check("An update lists only what changed since", changesSince("2026-10-31", template.changes).length === 1 && changesSince(null, template.changes).length === template.changes.length);
+check("An update never touches the declaration, register, settings or front page",
+  !Object.keys(template.files).some((p) => /^(crowdlocks\/|test\/|declaration\.txt|registrations\.json|destinations\.json|index\.html|README\.md)/.test(p)));
+
+const gcalls = [];
+const fakeRepo = (perms) => async (url, init = {}) => {
+  const u = String(url).replace("https://api.github.com", ""); const body = init.body ? JSON.parse(init.body) : null;
+  gcalls.push(`${init.method ?? "GET"} ${u}`);
+  if (u === "/repos/somefan/the-pub-fund") return Response.json({ permissions: perms });
+  if (u.endsWith("/git/ref/heads/main")) return Response.json({ object: { sha: "c5" } });
+  if (u.endsWith("/git/commits/c5")) return Response.json({ tree: { sha: "t5" } });
+  if (u.endsWith("/git/trees")) { gcalls.tree = body.tree.map((x) => x.path); return Response.json({ sha: "t6" }, { status: 201 }); }
+  if (u.endsWith("/git/commits")) { gcalls.message = body.message; return Response.json({ sha: "c6" }, { status: 201 }); }
+  if (u.endsWith("/git/refs/heads/main")) return Response.json({});
+  if (u.endsWith("/dispatches")) return new Response(null, { status: 204 });
+  if (u === "/users/janesmith") return Response.json({ login: "janesmith" });
+  if (u === "/users/nobody-here") return Response.json({ message: "Not Found" }, { status: 404 });
+  if (u === "/repos/somefan/the-pub-fund/collaborators/janesmith") { gcalls.perm = body.permission; return Response.json({ id: 1 }, { status: 201 }); }
+  return Response.json({ message: "unexpected " + u }, { status: 500 });
+};
+check("A member who isn't founder or maintainer can't write", !(await canWrite("t", "somefan", "the-pub-fund", fakeRepo({ push: false, pull: true }))));
+check("The founder or a maintainer can", await canWrite("t", "somefan", "the-pub-fund", fakeRepo({ push: true })));
+await updateCrowdlockRepo({ token: "t", owner: "somefan", repo: "the-pub-fund", files: template.files, message: "Update" }, fakeRepo({ push: true }));
+check("An update writes the inbox's files in one commit and restarts the inbox",
+  gcalls.tree.length === Object.keys(template.files).length && gcalls.includes("POST /repos/somefan/the-pub-fund/actions/workflows/relay-inbox.yml/dispatches"));
+check("A maintainer is invited with write access, not ownership",
+  (await addMaintainer({ token: "t", owner: "somefan", repo: "the-pub-fund", username: "@janesmith" }, fakeRepo({ push: true }))) === "invited" && gcalls.perm === "push");
+let badName = ""; try { await addMaintainer({ token: "t", owner: "somefan", repo: "the-pub-fund", username: "nobody-here" }, fakeRepo({})); } catch (e) { badName = e.message; }
+check("A username that doesn't exist is caught, in plain words", badName.includes("no GitHub account called nobody-here"));
+let junk = ""; try { await addMaintainer({ token: "t", owner: "x", repo: "y", username: "jane smith!" }, fakeRepo({})); } catch (e) { junk = e.message; }
+check("Something that isn't a username is caught before asking GitHub", junk.includes("isn't a GitHub username"));
 
 rule();
 console.log(failures === 0 ? "Starting a Crowdlock builds one that passes every check, and sets it up in the founder's own account." : `${failures} check(s) failed.`);

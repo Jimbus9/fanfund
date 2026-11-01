@@ -31,7 +31,11 @@ import {
 // @ts-ignore — plain modules shared with the tests
 import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS } from "./src/start.mjs";
 // @ts-ignore
-import { startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo } from "./src/github.mjs";
+import {
+  startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo, canWrite, updateCrowdlockRepo, addMaintainer, rememberSignIn, currentSignIn,
+} from "./src/github.mjs";
+// @ts-ignore
+import template from "./src/template.mjs";
 // Plain JavaScript modules: their results are used as loosely typed here.
 const build = buildCrowdlock as (x: any) => any;
 const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
@@ -39,6 +43,7 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
   locksOnRegister, submitLock, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
+  repoFromFileUrl, versionStatus, changesSince, baseFor,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
 import { postToRelays, announce, fetchAnnouncements } from "./src/relays.mjs";
@@ -496,6 +501,8 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
 
       {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} />}
 
+      <LookAfter c={c} />
+
       <Text style={s.h2}>Share it</Text>
       <Text style={s.p}>Anyone with the app can point their phone's camera at this code to open it.</Text>
       <View style={s.qr}><QRCode value={openLinkFor(c.url)} size={200} /></View>
@@ -826,6 +833,139 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
 }
 
 // ---------------------------------------------------------------------------
+// Looking after a Crowdlock: updates and maintainers
+//
+// For its founder and the maintainers they add — the people GitHub lets write
+// to its repository. Nobody's update is pushed into anybody's Crowdlock: an
+// update is offered, and only someone with access can apply it, in a commit
+// that says what changed.
+// ---------------------------------------------------------------------------
+
+/** Sign in to GitHub when needed, showing the short code; reuses this session's sign-in. */
+function useGitHub() {
+  const [code, setCode] = useState<{ userCode: string; verificationUri: string } | null>(null);
+  const withSignIn = async (task: (token: string) => Promise<void>) => {
+    let token = currentSignIn();
+    if (!token) {
+      const c = await startSignIn();
+      setCode({ userCode: c.userCode, verificationUri: c.verificationUri });
+      try { token = await waitForSignIn(c); } finally { setCode(null); }
+      rememberSignIn(token);
+    }
+    await task(token as string);
+  };
+  const codeView = code && (
+    <View style={s.panel}>
+      <Text style={s.p}>Sign in to GitHub and type this code:</Text>
+      <Text style={[s.big, { textAlign: "center", letterSpacing: 2 }]} selectable>{code.userCode}</Text>
+      <Button label="Copy the code" kind="plain" onPress={() => Clipboard.setStringAsync(code.userCode)} />
+      <Button label="Open GitHub" onPress={() => Linking.openURL(code.verificationUri)} />
+      <Text style={s.note}>Come back here once you've allowed it — this carries on by itself.</Text>
+    </View>
+  );
+  return { withSignIn, codeView };
+}
+
+function MaintainerAdvice() {
+  return <>
+    <Text style={s.p}>A maintainer can keep this Crowdlock running if you can't. They can update it and change what's published at its address — the same as you. They can never touch anyone's money.</Text>
+    <Text style={s.note}>Choose someone you trust personally, in a different household, likely to be reachable in a year. Being a committed member is a good sign but not enough on its own — anyone can become one for the price of a lock. Two maintainers is the right number.</Text>
+    <Text style={s.note}>They don't need to know GitHub: they make a free account at github.com (an email and a password) and tell you their username. You add it here; GitHub emails them an invitation; they tap Accept.</Text>
+  </>;
+}
+
+function MaintainerForm({ owner, repo }: { owner: string; repo: string }) {
+  const { withSignIn, codeView } = useGitHub();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const add = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await withSignIn(async (token) => {
+        if (!(await canWrite(token, owner, repo))) throw new Error("You're signed in to a GitHub account that isn't this Crowdlock's founder or a maintainer, so it can't add anyone.");
+        const r = await addMaintainer({ token, owner, repo, username: name });
+        setMsg({ ok: true, text: r === "already" ? `${name.trim()} already looks after it.` : `Invitation sent to ${name.trim()}. GitHub will email them — once they tap Accept, they're a maintainer.` });
+        setName("");
+      });
+    } catch (e: any) { setMsg({ ok: false, text: String(e.message ?? e) }); }
+    setBusy(false);
+  };
+  return <>
+    <Text style={s.label}>Their GitHub username</Text>
+    <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={name} onChangeText={setName} placeholder="e.g. janesmith" />
+    {codeView}
+    {msg && <Text style={msg.ok ? s.good : s.error}>{msg.text}</Text>}
+    <Button label={busy ? "Adding…" : "Add a maintainer"} disabled={busy || !name.trim()} onPress={add} />
+  </>;
+}
+
+function LookAfter({ c }: { c: Extract<Loaded, { ok: true }> }) {
+  const where = repoFromFileUrl(c.url);
+  const [status, setStatus] = useState<string>("unknown");
+  const [published, setPublished] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const { withSignIn, codeView } = useGitHub();
+
+  useEffect(() => {
+    if (!where) return;
+    const site = baseFor(c.url);
+    (async () => {
+      let v: string | null = null, hasInbox = false;
+      try { const r = await fetch(`${site}relay/VERSION`, { cache: "no-store" }); if (r.ok) v = await r.text(); } catch {}
+      if (v === null) { try { hasInbox = (await fetch(`${site}relay/inbox.mjs`, { cache: "no-store" })).ok; } catch {} }
+      setPublished(v);
+      setStatus(versionStatus(v, template.version, hasInbox));
+    })();
+  }, [c.url]);
+
+  // Not on GitHub Pages: nothing here can help. The Kop Fund's own repository
+  // ("source") is where this code is written, so it is never offered an
+  // update — but its maintainers can still be added here.
+  if (!where) return null;
+
+  const update = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await withSignIn(async (token) => {
+        if (!(await canWrite(token, where.owner, where.repo))) throw new Error("Only this Crowdlock's founder and its maintainers can update it, and the GitHub account you signed in with isn't one of them.");
+        const changes = changesSince(published, template.changes);
+        await updateCrowdlockRepo({
+          token, owner: where.owner, repo: where.repo, files: template.files,
+          message: `Update this Crowdlock's inbox to ${template.version}\n\nApplied from the Crowdlock app by a maintainer. Only the inbox's code changes; the declaration, register and settings are untouched.\n\n${changes.map((x: any) => `- ${x.change}`).join("\n")}`,
+        });
+        setStatus("current"); setPublished(template.version);
+        setMsg({ ok: true, text: "Updated. Its inbox restarts on the new code within a few minutes." });
+      });
+    } catch (e: any) { setMsg({ ok: false, text: String(e.message ?? e) }); }
+    setBusy(false);
+  };
+
+  return (
+    <View>
+      <Text style={s.h2}>Look after this Crowdlock</Text>
+      {status === "behind" && <Text style={s.note}>An update is available for this Crowdlock's inbox.</Text>}
+      {!open ? <Button label="For its founder and maintainers" kind="plain" onPress={() => setOpen(true)} /> : <>
+        {status === "behind" && <View style={s.panel}>
+          <Text style={s.p}>What the update brings:</Text>
+          {changesSince(published, template.changes).map((x: any) => <Text key={x.version} style={s.note}>• {x.change}</Text>)}
+          <Text style={s.note}>It changes only the inbox's code, in one commit anyone can read. The declaration, register and settings are untouched.</Text>
+          <Button label={busy ? "Updating…" : "Update it"} disabled={busy} onPress={update} />
+        </View>}
+        {status === "current" && <Text style={s.good}>Its inbox is up to date.</Text>}
+        {codeView}
+        {msg && <Text style={msg.ok ? s.good : s.error}>{msg.text}</Text>}
+        <Text style={s.label}>Maintainers</Text>
+        <MaintainerAdvice />
+        <MaintainerForm owner={where.owner} repo={where.repo} />
+      </>}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Finding Crowdlocks
 //
 // Read from announcements on public relays — no directory, nobody to approve
@@ -908,7 +1048,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
   const [code, setCode] = useState<{ userCode: string; verificationUri: string } | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ links: { label: string; url: string }[]; repoUrl: string; inboxStarted: boolean } | null>(null);
+  const [done, setDone] = useState<{ links: { label: string; url: string }[]; repoUrl: string; inboxStarted: boolean; owner: string; repo: string } | null>(null);
 
   // The test copy's co-signer key is made here, from the founder's own words,
   // on a path of its own. The real one is pasted in from wherever it lives.
@@ -937,6 +1077,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
       const c = await startSignIn();
       setCode({ userCode: c.userCode, verificationUri: c.verificationUri });
       const token = await waitForSignIn(c);
+      rememberSignIn(token);
       setStage("creating");
       // A free repository name: the Crowdlock's own, or with a number after it.
       let repoName = slugify(name), n = 1;
@@ -956,7 +1097,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
         const link = built.links.find((l: any) => l.url.endsWith(`/crowdlocks/${f.slug}.json`));
         if (link) await announce(DEFAULT_RELAYS, { url: link.url, name: f.network === "mainnet" ? name.trim() : `${name.trim()} — TEST`, about: about.trim(), network: f.network }).catch(() => 0);
       }
-      setDone({ links: built.links, repoUrl: made.repoUrl, inboxStarted: made.inboxStarted });
+      setDone({ links: built.links, repoUrl: made.repoUrl, inboxStarted: made.inboxStarted, owner: made.owner, repo: made.repo });
       setStage("done");
     } catch (e: any) { setError(String(e.message ?? e)); setStage("form"); setCode(null); }
   };
@@ -994,6 +1135,11 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
       <Text style={s.note}>Your repository: {done.repoUrl}</Text>
       {!done.inboxStarted && <Text style={s.note}>Its relay inbox will start by itself within the hour.</Text>}
       <Text style={s.note}>Next: open it from your Crowdlocks list and sign your own declaration, so you're its member 1.</Text>
+
+      <Text style={s.h2}>Add a maintainer</Text>
+      <MaintainerAdvice />
+      <MaintainerForm owner={done.owner} repo={done.repo} />
+      <Text style={s.note}>You can do this any time from the Crowdlock's page, under "Look after this Crowdlock".</Text>
       <Button label="Back to wallet" onPress={() => go({ name: "home", words })} />
     </View>
   );

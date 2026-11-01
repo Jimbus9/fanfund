@@ -84,6 +84,19 @@ export async function whoAmI(token, repoName, fetchImpl = globalThis.fetch) {
   return { login: me.login, taken };
 }
 
+/** Write files to a repository's main branch as one commit. Returns the commit's sha. */
+async function commitFiles(gh, owner, repo, files, message) {
+  const head = await gh("GET", `/repos/${owner}/${repo}/git/ref/heads/main`);
+  const base = await gh("GET", `/repos/${owner}/${repo}/git/commits/${head.object.sha}`);
+  const tree = await gh("POST", `/repos/${owner}/${repo}/git/trees`, {
+    base_tree: base.tree.sha,
+    tree: Object.entries(files).map(([path, content]) => ({ path, mode: "100644", type: "blob", content })),
+  });
+  const commit = await gh("POST", `/repos/${owner}/${repo}/git/commits`, { message, tree: tree.sha, parents: [head.object.sha] });
+  await gh("PATCH", `/repos/${owner}/${repo}/git/refs/heads/main`, { sha: commit.sha });
+  return commit.sha;
+}
+
 /**
  * Create the Crowdlock: a public repository in the founder's account holding
  * every file, in one commit; its site switched on; its relay inbox started.
@@ -100,24 +113,16 @@ export async function createCrowdlockRepo({ token, repoName, description, files,
   // files can be added in one go.
   await gh("POST", "/user/repos", { name: repoName, description, private: false, auto_init: true, has_wiki: false, has_projects: false });
 
-  let head;
-  for (let i = 0; i < 10 && !head; i++) {
-    try { head = await gh("GET", `/repos/${owner}/${repoName}/git/ref/heads/main`); }
+  let ready = false;
+  for (let i = 0; i < 10 && !ready; i++) {
+    try { await gh("GET", `/repos/${owner}/${repoName}/git/ref/heads/main`); ready = true; }
     catch (e) { if (e.status !== 404 && e.status !== 409) throw e; await sleep(1500); }
   }
-  if (!head) throw new Error("GitHub made the repository but it isn't ready yet — try again in a minute");
-  const baseCommit = await gh("GET", `/repos/${owner}/${repoName}/git/commits/${head.object.sha}`);
+  if (!ready) throw new Error("GitHub made the repository but it isn't ready yet — try again in a minute");
 
   progress("Writing the declaration, register and inbox");
-  const tree = await gh("POST", `/repos/${owner}/${repoName}/git/trees`, {
-    base_tree: baseCommit.tree.sha,
-    tree: Object.entries(files).map(([path, content]) => ({ path, mode: "100644", type: "blob", content })),
-  });
-  const commit = await gh("POST", `/repos/${owner}/${repoName}/git/commits`, {
-    message: "Start this Crowdlock\n\nSet up by the Crowdlock app: the declaration, an empty register, a plain front page, and the relay inbox that collects members' registrations and locks.",
-    tree: tree.sha, parents: [head.object.sha],
-  });
-  await gh("PATCH", `/repos/${owner}/${repoName}/git/refs/heads/main`, { sha: commit.sha });
+  await commitFiles(gh, owner, repoName, files,
+    "Start this Crowdlock\n\nSet up by the Crowdlock app: the declaration, an empty register, a plain front page, and the relay inbox that collects members' registrations and locks.");
 
   progress("Switching on its website");
   try { await gh("POST", `/repos/${owner}/${repoName}/pages`, { source: { branch: "main", path: "/" } }); }
@@ -136,3 +141,60 @@ export async function createCrowdlockRepo({ token, repoName, description, files,
     repoUrl: `https://github.com/${owner}/${repoName}`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Looking after a Crowdlock: updates and maintainers
+//
+// Only people GitHub lets write to the repository — its founder and the
+// maintainers they add — can do either. Nobody else's sign-in can, and the
+// app does not pretend otherwise.
+// ---------------------------------------------------------------------------
+
+/** Can the signed-in person write to this repository? */
+export async function canWrite(token, owner, repo, fetchImpl = globalThis.fetch) {
+  const gh = client(token, fetchImpl);
+  try {
+    const r = await gh("GET", `/repos/${owner}/${repo}`);
+    return !!(r.permissions?.push || r.permissions?.admin || r.permissions?.maintain);
+  } catch (e) { if (e.status === 404) return false; throw e; }
+}
+
+/**
+ * Bring a Crowdlock's inbox up to date: the template's files written in one
+ * commit whose message lists what changed. The Crowdlock's own files — its
+ * declaration, register and settings — are never touched.
+ */
+export async function updateCrowdlockRepo({ token, owner, repo, files, message }, fetchImpl = globalThis.fetch) {
+  const gh = client(token, fetchImpl);
+  const sha = await commitFiles(gh, owner, repo, files, message);
+  // Restart the inbox on the new code; if it is mid-run, it picks the new code
+  // up at its next run anyway.
+  try { await gh("POST", `/repos/${owner}/${repo}/actions/workflows/relay-inbox.yml/dispatches`, { ref: "main" }); } catch {}
+  return sha;
+}
+
+/**
+ * Invite someone to be a maintainer. GitHub emails them; they accept. Returns
+ * "invited", or "already" if they already have access.
+ */
+export async function addMaintainer({ token, owner, repo, username }, fetchImpl = globalThis.fetch) {
+  const gh = client(token, fetchImpl);
+  const who = String(username ?? "").trim().replace(/^@/, "");
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,38})$/i.test(who)) throw new Error("That isn't a GitHub username — it's letters, numbers and dashes, like the name in their profile's address");
+  try { await gh("GET", `/users/${who}`); } catch (e) { if (e.status === 404) throw new Error(`There's no GitHub account called ${who} — check the spelling with them`); throw e; }
+  let res;
+  try { res = await gh("PUT", `/repos/${owner}/${repo}/collaborators/${who}`, { permission: "push" }, [201, 204]); }
+  catch (e) {
+    if (e.status === 403 || e.status === 404 || e.status === 422) {
+      throw new Error(`GitHub didn't let the app add ${who} (${e.message}). You can do it on github.com instead: open github.com/${owner}/${repo}, then Settings → Collaborators → Add people, and type ${who}.`);
+    }
+    throw e;
+  }
+  return res ? "invited" : "already";
+}
+
+// Signed in for this session only: kept in memory, never saved, and GitHub
+// ends it by itself within hours. Saves a founder typing a code twice in a row.
+let session = null;
+export function rememberSignIn(token) { session = { token, until: Date.now() + 60 * 60 * 1000 }; }
+export function currentSignIn() { return session && session.until > Date.now() ? session.token : null; }

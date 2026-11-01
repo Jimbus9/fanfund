@@ -263,3 +263,33 @@ export function matchesSearch(item, query) {
   if (!q) return true;
   return `${item.name} ${item.about ?? ""}`.toLowerCase().includes(q);
 }
+
+/**
+ * The GitHub repository behind a Crowdlock published on GitHub Pages, from
+ * its file's link — or null if it isn't hosted that way.
+ */
+export function repoFromFileUrl(fileUrl) {
+  const m = /^https:\/\/([a-z0-9-]+)\.github\.io\/([A-Za-z0-9._-]+)\//i.exec(String(fileUrl ?? ""));
+  return m ? { owner: m[1], repo: m[2] } : null;
+}
+
+/**
+ * What a Crowdlock's published inbox version means, given the app's.
+ *   "source"   The Kop Fund's own repository, where this code is written — never offered an update
+ *   "current"  up to date
+ *   "behind"   an update is available
+ *   "unknown"  not made by the app
+ * `published` is the text of its relay/VERSION, or null if there is none.
+ */
+export function versionStatus(published, appVersion, hasInbox) {
+  const v = typeof published === "string" ? published.trim() : null;
+  if (v === "source") return "source";
+  if (v === null) return hasInbox ? "behind" : "unknown";   // made before versions existed
+  return v >= appVersion ? "current" : "behind";
+}
+
+/** The changes a Crowdlock on `published` would get by updating. */
+export function changesSince(published, changes) {
+  const v = typeof published === "string" ? published.trim() : "";
+  return changes.filter((c) => c.version > v);
+}
