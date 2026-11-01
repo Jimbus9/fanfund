@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { esploraChain } from "../src/wallet/esplora.mjs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
-import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister, openLinkFor, fileUrlFromOpenLink, shareLinkFor } from "../src/crowdlocks.mjs";
+import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch } from "../src/crowdlocks.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SITE = "https://jimbus9.github.io/fanfund/";
@@ -163,6 +163,14 @@ check("An app link to anything but an https file link is ignored",
     && fileUrlFromOpenLink("https://example.com") === null && fileUrlFromOpenLink("crowdlock://add?url=%E0%A4%A") === null);
 check("Sharing The Kop Fund sends people to its join page", kop.ok && shareLinkFor(kop) === "https://jimbus9.github.io/fanfund/join/");
 check("A Crowdlock naming no page is shared as its site", test.ok && shareLinkFor(test) === SITE);
+
+// Finding
+const found = rankFound([
+  { name: "Spam 1", sats: 0n, members: 0 }, { name: "Small", sats: 50000n, members: 3 },
+  { name: "Big", sats: 900000n, members: 2 }, { name: "Also small", sats: 50000n, members: 5 },
+]);
+check("Found Crowdlocks rank by committed bitcoin, then committed members", found.map((x) => x.name).join(",") === "Big,Also small,Small,Spam 1");
+check("Search matches the name or what it's for", matchesSearch({ name: "The Pub Fund", about: "Buying the Red Lion" }, "red lion") && !matchesSearch({ name: "X", about: "Y" }, "pub"));
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The app's Crowdlock loader accepts the real files and refuses doctored ones." : `${failures} check(s) failed.`);

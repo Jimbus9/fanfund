@@ -116,3 +116,50 @@ export async function applyRecords(register, events, { crowdlock, statement, now
   }
   return { register: reg, outcome };
 }
+
+// ---------------------------------------------------------------------------
+// Announcements: how Crowdlocks are found
+//
+// A Crowdlock announces itself on its relays — its file's link, name, purpose
+// and network — when it is started, and its inbox repeats that weekly so it
+// does not fade from relays that prune old posts. The app's Find screen reads
+// announcements, loads and checks every Crowdlock they point at, and ranks
+// them by committed bitcoin. Anybody may announce anything; an announcement
+// only says where to look, so a fake one leads to a file that fails its
+// checks, and nothing about money can be faked by announcing.
+// ---------------------------------------------------------------------------
+
+export const ANNOUNCE_KIND = 3714;
+export const ANNOUNCE_TAG = "crowdlock-announce";
+const FILE_LINK = /^https:\/\/[^\s?#]+\.json$/;
+
+/** The Nostr event template announcing a Crowdlock. */
+export function announcementTemplate({ url, name, about, network }, createdAt) {
+  return {
+    kind: ANNOUNCE_KIND,
+    created_at: createdAt,
+    tags: [["t", ANNOUNCE_TAG], ["r", url]],
+    content: JSON.stringify({ url, name, about, network }),
+  };
+}
+
+/** An announcement read back out of an event, or null if it isn't a well-formed one. */
+export function announcementFromEvent(event) {
+  if (!event || event.kind !== ANNOUNCE_KIND || typeof event.content !== "string" || event.content.length > 2000) return null;
+  let a;
+  try { a = JSON.parse(event.content); } catch { return null; }
+  if (!a || typeof a.url !== "string" || !FILE_LINK.test(a.url) || a.url.length > 300) return null;
+  if (typeof a.name !== "string" || a.name.length === 0 || a.name.length > 120) return null;
+  return {
+    url: a.url, name: a.name,
+    about: typeof a.about === "string" ? a.about.slice(0, 300) : "",
+    network: typeof a.network === "string" ? a.network : "",
+    at: event.created_at,
+  };
+}
+
+/** Is a Crowdlock due to be announced again? Weekly, so relays keep it. */
+export function announcementDue(lastDate, today) {
+  if (!lastDate) return true;
+  return (Date.parse(today) - Date.parse(lastDate)) / 86400000 >= 7;
+}

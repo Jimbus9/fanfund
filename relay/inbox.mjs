@@ -11,9 +11,9 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyRecords } from "../js/inbox.mjs";
+import { applyRecords, announcementTemplate, announcementDue } from "../js/inbox.mjs";
 import { membershipStatement, checkCrowdlock } from "../js/crowdlock.mjs";
-import { fetchRecords } from "./nostr.mjs";
+import { fetchRecords, postTemplate } from "./nostr.mjs";
 import { recordPass, planSwaps, SILENT_DAYS } from "../js/relayhealth.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,6 +31,17 @@ const HEALTH = join(ROOT, "relay", "health.json");
 let allHealth = {};
 try { allHealth = JSON.parse(readFileSync(HEALTH, "utf8")); } catch {}
 const healthBefore = JSON.stringify(allHealth);
+
+// When each listed Crowdlock was last announced (relay/announced.json), and
+// where this repository's site is, so each file's public link can be given.
+const ANNOUNCED = join(ROOT, "relay", "announced.json");
+let announced = {};
+try { announced = JSON.parse(readFileSync(ANNOUNCED, "utf8")); } catch {}
+const announcedBefore = JSON.stringify(announced);
+let listed = [];
+try { listed = JSON.parse(readFileSync(join(ROOT, "crowdlocks", "index.json"), "utf8")).crowdlocks ?? []; } catch {}
+const [owner, repo] = String(process.env.GITHUB_REPOSITORY ?? "").split("/");
+const siteBase = owner && repo ? `https://${owner.toLowerCase()}.github.io/${repo}/` : null;
 
 for (const file of readdirSync(join(ROOT, "crowdlocks")).filter((f) => f.endsWith(".json") && f !== "index.json")) {
   const crowdlock = JSON.parse(readFileSync(join(ROOT, "crowdlocks", file), "utf8"));
@@ -56,6 +67,18 @@ for (const file of readdirSync(join(ROOT, "crowdlocks")).filter((f) => f.endsWit
   for (const r of swap.stuck) console.log(`${file}: WARNING ${r} silent for ${SILENT_DAYS}+ days and no spare relay is left to replace it`);
   if (swap.swaps.length) writeFileSync(join(ROOT, "crowdlocks", file), JSON.stringify(swap.crowdlock, null, 2) + "\n");
 
+  // Announce it weekly, if this site lists it — a Crowdlock left off its own
+  // index (like a private test copy) is never announced.
+  const slug = file.replace(/\.json$/, "");
+  if (siteBase && listed.includes(slug) && announcementDue(announced[file], today)) {
+    const url = `${siteBase}crowdlocks/${file}`;
+    const posted = await postTemplate(crowdlock.relays, announcementTemplate(
+      { url, name: crowdlock.name, about: crowdlock.about ?? "", network: crowdlock.network }, now));
+    const took = posted.filter((p) => p.ok).length;
+    console.log(`${file}: announced to ${took} of ${posted.length} relays`);
+    if (took > 0) announced[file] = today;
+  }
+
   const confirmedSats = async (address) => {
     const res = await fetch(`${crowdlock.chain_api}/address/${address}`);
     if (!res.ok) throw new Error(String(res.status));
@@ -74,6 +97,10 @@ for (const file of readdirSync(join(ROOT, "crowdlocks")).filter((f) => f.endsWit
   }
 }
 
+if (JSON.stringify(announced) !== announcedBefore) {
+  writeFileSync(ANNOUNCED, JSON.stringify(announced, null, 2) + "\n");
+  if (!messages.length) messages.push("Announced on the relays");
+}
 if (JSON.stringify(allHealth) !== healthBefore) {
   writeFileSync(HEALTH, JSON.stringify(allHealth, null, 2) + "\n");
   if (!messages.length) messages.push("Relay health");

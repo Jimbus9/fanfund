@@ -29,7 +29,7 @@ import {
   lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain modules shared with the tests
-import { buildCrowdlock, declarationSkeleton, slugify } from "./src/start.mjs";
+import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS } from "./src/start.mjs";
 // @ts-ignore
 import { startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo } from "./src/github.mjs";
 // Plain JavaScript modules: their results are used as loosely typed here.
@@ -38,10 +38,10 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
-  locksOnRegister, submitLock, openLinkFor, fileUrlFromOpenLink, shareLinkFor,
+  locksOnRegister, submitLock, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
-import { postToRelays } from "./src/relays.mjs";
+import { postToRelays, announce, fetchAnnouncements } from "./src/relays.mjs";
 import {
   loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
   loadSavedLocks, saveLock, forgetSavedLocks,
@@ -58,7 +58,8 @@ type Screen =
   | { name: "send"; words: string }
   | { name: "crowdlock"; words: string; url: string }
   | { name: "addCrowdlock"; words: string; link?: string }
-  | { name: "startCrowdlock"; words: string };
+  | { name: "startCrowdlock"; words: string }
+  | { name: "findCrowdlocks"; words: string };
 
 export default function App() {
   const [screen, setScreenRaw] = useState<Screen>({ name: "loading" });
@@ -109,6 +110,7 @@ export default function App() {
           {screen.name === "crowdlock" && <CrowdlockScreen words={screen.words} url={screen.url} go={setScreen} />}
           {screen.name === "addCrowdlock" && <AddCrowdlock key={screen.link ?? "add"} words={screen.words} link={screen.link} go={setScreen} />}
           {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
+          {screen.name === "findCrowdlocks" && <FindCrowdlocks words={screen.words} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -270,6 +272,7 @@ function Home({ words, go }: { words: string; go: Go }) {
 
       <Text style={s.h2}>Crowdlocks</Text>
       <CrowdlockList words={words} address={account.address} go={go} />
+      <Button label="Find Crowdlocks" onPress={() => go({ name: "findCrowdlocks", words })} />
       <Button label="Add a Crowdlock" kind="plain" onPress={() => go({ name: "addCrowdlock", words })} />
       <Button label="Start a Crowdlock" kind="plain" onPress={() => go({ name: "startCrowdlock", words })} />
       <Button label="Remove wallet from this phone" kind="danger" onPress={remove} />
@@ -823,6 +826,71 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
 }
 
 // ---------------------------------------------------------------------------
+// Finding Crowdlocks
+//
+// Read from announcements on public relays — no directory, nobody to approve
+// a listing. Every Crowdlock found is loaded and checked like any other before
+// it is shown, and the list is ranked by committed bitcoin, which nobody can
+// fake by announcing.
+// ---------------------------------------------------------------------------
+
+type Found = { url: string; name: string; about: string; sats: bigint; members: number };
+
+function FindCrowdlocks({ words, go }: { words: string; go: Go }) {
+  const [found, setFound] = useState<Found[] | null>(null);
+  const [mine, setMine] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("Asking the relays…");
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      setMine(await allLinks());
+      const announced = (await fetchAnnouncements(DEFAULT_RELAYS)).filter((a: any) => a.network === NETWORK).slice(0, 40);
+      if (!live) return;
+      setStatus(announced.length ? `Checking ${announced.length} announced Crowdlock${announced.length === 1 ? "" : "s"}…` : "");
+      const results: Found[] = [];
+      await Promise.all(announced.map(async (a: any) => {
+        const c: Loaded = await loadCrowdlock(a.url);
+        if (!c.ok || c.crowdlock.network !== NETWORK) return;   // fails its checks: never shown
+        let t = { sats: 0n, members: 0 };
+        try { t = await committedTotal(c); } catch {}
+        results.push({ url: c.url, name: c.crowdlock.name, about: c.crowdlock.about ?? "", sats: t.sats, members: t.members });
+      }));
+      if (live) { setFound(rankFound(results)); setStatus(""); }
+    })().catch(() => { if (live) { setFound([]); setStatus("Couldn't reach the relays — check your connection, or turn off any VPN."); } });
+    return () => { live = false; };
+  }, []);
+
+  const open = async (url: string) => {
+    const added = await loadAddedCrowdlocks();
+    if (!added.includes(url) && !STARTING_LIST.includes(url)) await saveAddedCrowdlocks([...added, url]);
+    go({ name: "crowdlock", words, url });
+  };
+
+  const shown = (found ?? []).filter((f) => matchesSearch(f, query));
+  return (
+    <View>
+      <Text style={s.h1}>Find Crowdlocks</Text>
+      <Text style={s.p}>Crowdlocks that have announced themselves, ranked by the bitcoin actually locked in them. Anyone can announce one; nobody can fake the money, and anything that fails its checks isn't shown.</Text>
+      <TextInput style={s.input} placeholder="Search by name or purpose" value={query} onChangeText={setQuery} autoCorrect={false} />
+      {status ? <Text style={s.note}>{status}</Text> : null}
+      {found === null && <ActivityIndicator style={{ marginVertical: 16 }} />}
+      {found !== null && shown.length === 0 && !status && <Text style={s.note}>{query ? "Nothing matches that." : "None found yet."}</Text>}
+      {shown.map((f) => (
+        <Pressable key={f.url} style={s.card} onPress={() => open(f.url)}>
+          <Text style={s.cardTitle}>{f.name}</Text>
+          {f.about ? <Text style={s.p}>{f.about}</Text> : null}
+          <Text style={s.note}>{btc(f.sats)} locked · {f.members} committed member{f.members === 1 ? "" : "s"}</Text>
+          <Text style={mine.includes(f.url) ? s.good : s.link}>{mine.includes(f.url) ? "In your list" : "Have a look →"}</Text>
+        </Pressable>
+      ))}
+      <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Starting a Crowdlock
 // ---------------------------------------------------------------------------
 
@@ -880,6 +948,14 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
       // Add it to this phone's list, the same as a Crowdlock added by link.
       const added = await loadAddedCrowdlocks();
       await saveAddedCrowdlocks([...added, ...built.links.map((l: any) => l.url).filter((u: string) => !added.includes(u))]);
+      // Announce it on the relays straight away, so others can find it now;
+      // its own inbox repeats this weekly. Best effort: not finding a relay
+      // just means it shows up after the inbox's first announcement.
+      setSteps((x) => [...x, "Announcing it so people can find it"]);
+      for (const f of built.fingerprints) {
+        const link = built.links.find((l: any) => l.url.endsWith(`/crowdlocks/${f.slug}.json`));
+        if (link) await announce(DEFAULT_RELAYS, { url: link.url, name: f.network === "mainnet" ? name.trim() : `${name.trim()} — TEST`, about: about.trim(), network: f.network }).catch(() => 0);
+      }
       setDone({ links: built.links, repoUrl: made.repoUrl, inboxStarted: made.inboxStarted });
       setStage("done");
     } catch (e: any) { setError(String(e.message ?? e)); setStage("form"); setCode(null); }

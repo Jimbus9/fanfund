@@ -246,3 +246,20 @@ export async function submitJoin(crowdlock, { address, signature }, fetchImpl = 
     return { ok: false, error: "could not reach the register — your signature is fine, try again in a moment" };
   }
 }
+
+/**
+ * Order found Crowdlocks the way the register counts: committed bitcoin
+ * first, then committed members, then name. Neither can be faked by
+ * announcing, so a flood of junk announcements sinks to the bottom.
+ */
+export function rankFound(items) {
+  return [...items].sort((a, b) =>
+    (b.sats > a.sats ? 1 : b.sats < a.sats ? -1 : 0) || (b.members - a.members) || String(a.name).localeCompare(String(b.name)));
+}
+
+/** Does a found Crowdlock match what was typed in the search box? */
+export function matchesSearch(item, query) {
+  const q = String(query ?? "").trim().toLowerCase();
+  if (!q) return true;
+  return `${item.name} ${item.about ?? ""}`.toLowerCase().includes(q);
+}

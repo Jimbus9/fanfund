@@ -6,7 +6,7 @@
 
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { Relay } from "nostr-tools/relay";
-import { recordEventTemplate } from "../../js/inbox.mjs";
+import { recordEventTemplate, announcementTemplate, announcementFromEvent, ANNOUNCE_KIND, ANNOUNCE_TAG } from "../../js/inbox.mjs";
 
 const TIMEOUT = 12000;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("no answer")), ms))]);
@@ -32,4 +32,42 @@ export async function postToRelays(crowdlock, record) {
   }));
   const accepted = results.filter((r) => r.ok).length;
   return { ok: accepted > 0, accepted, total: relays.length, failures: results.filter((r) => !r.ok) };
+}
+
+/** Announce a Crowdlock on relays, so the Find screen can show it. Returns how many took it. */
+export async function announce(relays, { url, name, about, network }) {
+  const event = finalizeEvent(announcementTemplate({ url, name, about, network }, Math.floor(Date.now() / 1000)), generateSecretKey());
+  const results = await Promise.all(relays.map(async (u) => {
+    let relay;
+    try { relay = await withTimeout(Relay.connect(u), TIMEOUT); await withTimeout(relay.publish(event), TIMEOUT); return true; }
+    catch { return false; }
+    finally { try { relay?.close(); } catch {} }
+  }));
+  return results.filter(Boolean).length;
+}
+
+/**
+ * Every Crowdlock announced on these relays in the last 120 days: the newest
+ * announcement for each link, newest first. Says nothing about whether any of
+ * them is genuine — the caller loads and checks each one.
+ */
+export async function fetchAnnouncements(relays, since = Math.floor(Date.now() / 1000) - 120 * 86400) {
+  const byUrl = new Map();
+  await Promise.all(relays.map(async (u) => {
+    let relay;
+    try {
+      relay = await withTimeout(Relay.connect(u), TIMEOUT);
+      await withTimeout(new Promise((resolve) => {
+        const sub = relay.subscribe([{ kinds: [ANNOUNCE_KIND], "#t": [ANNOUNCE_TAG], since, limit: 500 }], {
+          onevent(e) {
+            const a = announcementFromEvent(e);
+            if (a && (!byUrl.has(a.url) || byUrl.get(a.url).at < a.at)) byUrl.set(a.url, a);
+          },
+          oneose() { sub.close(); resolve(); },
+        });
+      }), TIMEOUT);
+    } catch {}
+    finally { try { relay?.close(); } catch {} }
+  }));
+  return [...byUrl.values()].sort((a, b) => b.at - a.at);
 }

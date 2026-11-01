@@ -9,6 +9,18 @@ import { recordEventTemplate, RECORD_KIND, FINGERPRINT_TAG } from "../js/inbox.m
 const TIMEOUT = 15000;
 const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what} timed out`)), ms))]);
 
+/** Post any event template to every relay with a throwaway key. Returns { relay, ok, reason } for each. */
+export async function postTemplate(relays, template) {
+  const event = finalizeEvent(template, generateSecretKey());
+  return Promise.all(relays.map(async (url) => {
+    try {
+      const relay = await withTimeout(Relay.connect(url), TIMEOUT, "connecting");
+      try { await withTimeout(relay.publish(event), TIMEOUT, "posting"); return { relay: url, ok: true }; }
+      finally { relay.close(); }
+    } catch (e) { return { relay: url, ok: false, reason: String(e.message ?? e) }; }
+  }));
+}
+
 /**
  * Post one record to every relay, signed with a throwaway Nostr key (the
  * record's own Bitcoin signature, or the chain, is what makes it count).

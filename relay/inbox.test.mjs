@@ -11,7 +11,7 @@ import { signAsync, getPublicKey, utils } from "../js/vendor/noble-secp256k1.js"
 import { messageHash, memberAddressForOwnerKey } from "../js/verify.mjs";
 import { membershipStatement, checkCrowdlock } from "../js/crowdlock.mjs";
 import { lockAddress } from "../js/lockrecord.mjs";
-import { applyRecords, recordEventTemplate, recordFromEvent, RECORD_KIND } from "../js/inbox.mjs";
+import { applyRecords, recordEventTemplate, recordFromEvent, RECORD_KIND, announcementTemplate, announcementFromEvent, announcementDue, ANNOUNCE_KIND } from "../js/inbox.mjs";
 import { recordPass, planSwaps } from "../js/relayhealth.mjs";
 
 const ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), "..");
@@ -116,6 +116,18 @@ check("A relay that comes back before the seventh day is not swapped", back[B].s
 const noSpare = planSwaps({ ...cl, spare_relays: [] }, h, "2026-11-20");
 check("With no spare left it is reported, not removed", noSpare.swaps.length === 0 && noSpare.stuck[0] === B);
 check("A relay listed as both live and spare is refused", !checkCrowdlock({ ...cl, spare_relays: [A] }).ok);
+
+// ---- Announcements ----
+const ann = finalizeEvent(announcementTemplate({ url: "https://somefan.github.io/pub/crowdlocks/pub.json", name: "The Pub Fund", about: "Buying the Red Lion.", network: "mainnet" }, now), generateSecretKey());
+check("An announcement is a valid Nostr event, and reads back", verifyEvent(ann) && ann.kind === ANNOUNCE_KIND && announcementFromEvent(ann)?.name === "The Pub Fund");
+check("An announcement pointing anywhere but an https .json file is ignored",
+  announcementFromEvent(finalizeEvent(announcementTemplate({ url: "http://x.example/c.json", name: "X" }, now), generateSecretKey())) === null
+    && announcementFromEvent(finalizeEvent(announcementTemplate({ url: "https://x.example/page.html", name: "X" }, now), generateSecretKey())) === null);
+check("An announcement with no name, or junk, is ignored",
+  announcementFromEvent(finalizeEvent(announcementTemplate({ url: "https://x.example/c.json", name: "" }, now), generateSecretKey())) === null
+    && announcementFromEvent({ ...ann, content: "{nope" }) === null && announcementFromEvent({ ...ann, kind: 1 }) === null);
+check("Announced weekly: not again within six days, again on the seventh",
+  announcementDue(undefined, "2026-11-01") && !announcementDue("2026-11-01", "2026-11-07") && announcementDue("2026-11-01", "2026-11-08"));
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The relay inbox takes in valid records and only those." : `${failures} check(s) failed.`);
