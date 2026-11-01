@@ -249,7 +249,13 @@ const PUBKEY = /^0[23][0-9a-f]{64}$/;
  * the next midnight (UTC) so a lock reads as a plain date. Test Crowdlocks may
  * offer lengths under a day; those are not rounded.
  */
-export function lockDate(years, nowSeconds = Math.floor(Date.now() / 1000)) {
+export function lockDate(years, nowSeconds = Math.floor(Date.now() / 1000), medianTime = 0) {
+  // Count from whichever is later: this device's clock or the network's own
+  // (the median time of recent blocks, which is what the date is judged by).
+  // On real bitcoin the network's runs about an hour behind, so nothing
+  // changes; on testnet4 it often runs ahead, and a short test lock counted
+  // from the phone would already be past on the network's clock.
+  nowSeconds = Math.max(nowSeconds, medianTime || 0);
   const t = Math.ceil(nowSeconds + years * YEAR);
   return years * YEAR < DAY ? t : Math.ceil(t / DAY) * DAY;
 }
