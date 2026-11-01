@@ -66,11 +66,12 @@ const emptyDestinations = (c, today) => ({
   minimum_age_days: c.destination_wait_days, threshold: c.attestor_threshold, attestors: [], entries: [],
 });
 
-function crowdlockFile({ name, about, disclaimer, title, declFile, declText, network, minimumSats, cosigner, regDir }) {
+function crowdlockFile({ name, about, disclaimer, title, declFile, declText, network, minimumSats, cosigner, regDir, site }) {
   return {
     format: 1,
     name,
     about,
+    site,
     disclaimer,
     declaration: { title, version: 1, file: declFile, sha256: declarationHash(declText) },
     network,
@@ -104,6 +105,7 @@ function frontPage({ name, about, links }) {
   body { font: 17px/1.55 system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; color: #1a1a1a; background: #fff; }
   code { word-break: break-all; background: #f3f3f3; padding: 2px 4px; border-radius: 4px; font-size: 14px; }
   .note { color: #555; font-size: 15px; }
+  .btn { display: inline-block; background: #C8102E; color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 700; }
   @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } code { background: #222; } .note { color: #aaa; } }
 </style>
 </head>
@@ -112,8 +114,8 @@ function frontPage({ name, about, links }) {
 <p>${esc(about)}</p>
 <p><strong>This is a Crowdlock.</strong> Nobody pools money. Each member keeps their own bitcoin in their own wallet, locked until a date they choose, and backs a purchase only by signing for it themselves. Nobody receives anything financial in return, ever.</p>
 ${links.map((l) => `<h2>${esc(l.label)}</h2>
-<p>To join with the Crowdlock app, tap <em>Add a Crowdlock</em> and paste:</p>
-<p><code>${esc(l.url)}</code></p>
+<p><a class="btn" href="crowdlock://add?url=${encodeURIComponent(l.url)}">Open in the Crowdlock app</a></p>
+<p class="note">Or, in the app, tap <em>Add a Crowdlock</em> and paste: <code>${esc(l.url)}</code></p>
 <p class="note"><a href="${esc(l.declaration)}">Read the declaration</a> · <a href="${esc(l.register)}">The register</a> — every signature and lock, checkable by anyone.</p>`).join("\n")}
 <p class="note">Started with the Crowdlock app. The method is published at <a href="https://jimbus9.github.io/fanfund/spec/">jimbus9.github.io/fanfund/spec</a>.</p>
 </body>
@@ -168,7 +170,7 @@ export function buildCrowdlock({ name, about, title, declarationText, network, m
   if (network === "mainnet") {
     const c = crowdlockFile({
       name, about, disclaimer: "Nobody receives anything financial in return, ever. This is not an investment.",
-      title, declFile: "declaration.txt", declText: text, network, minimumSats, cosigner: cosignerPubkey, regDir: "",
+      title, declFile: "declaration.txt", declText: text, network, minimumSats, cosigner: cosignerPubkey, regDir: "", site: siteBase,
     });
     files[`crowdlocks/${slug}.json`] = JSON.stringify(c, null, 2) + "\n";
     files["declaration.txt"] = text;
@@ -185,7 +187,7 @@ export function buildCrowdlock({ name, about, title, declarationText, network, m
     name: `${name} — TEST`, about: `A test copy of ${name} on Bitcoin's test network, for practising with test money. Nothing here is real.`,
     disclaimer: "TEST ONLY. Test bitcoin has no value. Joining here does not make you a member of the real one.",
     title: `${title} — test copy`, declFile: "test/declaration.txt", declText: testText, network: "testnet4",
-    minimumSats: 10000, cosigner: testCosignerPubkey, regDir: "test/",
+    minimumSats: 10000, cosigner: testCosignerPubkey, regDir: "test/", site: siteBase,
   });
   files[`crowdlocks/${slug}-test.json`] = JSON.stringify(t, null, 2) + "\n";
   files["test/declaration.txt"] = testText;

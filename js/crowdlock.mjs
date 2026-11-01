@@ -118,6 +118,13 @@ export function checkCrowdlock(c, { declarationText } = {}) {
     }
   }
 
+  // Optional. The page to send people to when this Crowdlock is shared — its
+  // front page or joining page. Without it, apps share the site the file
+  // sits in.
+  if (c.site !== undefined) {
+    need(typeof c.site === "string" && /^https:\/\/[^\s]+$/.test(c.site) && c.site.length <= 200, "site, if given, must be an https address");
+  }
+
   // Optional. Public Nostr relays where members post signed registrations and
   // locks, for the Crowdlock's own repository to collect (js/inbox.mjs). No
   // account, no server and no key of anybody's sits in that path.

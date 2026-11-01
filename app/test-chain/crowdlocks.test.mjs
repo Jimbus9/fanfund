@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { esploraChain } from "../src/wallet/esplora.mjs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
-import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister } from "../src/crowdlocks.mjs";
+import { loadCrowdlock, baseFor, membershipOf, committedTotal, submitJoin, STARTING_LIST, shortBtc, poundsPerBtc, COUNTING_RULE_URL, submitLock, locksOnRegister, openLinkFor, fileUrlFromOpenLink, shareLinkFor } from "../src/crowdlocks.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SITE = "https://jimbus9.github.io/fanfund/";
@@ -153,6 +153,16 @@ check("An explorer that never answers is given up on, with a plain reason", /did
 let unreachable = null;
 try { await esploraChain("https://x", async () => { throw new TypeError("Network request failed"); }, 50).utxos("tb1qme"); } catch (e) { unreachable = e.message; }
 check("One that can't be reached says so too", /couldn't reach/.test(unreachable ?? ""));
+
+// Sharing
+const kopUrl = `${SITE}crowdlocks/kop-fund.json`;
+const app = openLinkFor(kopUrl);
+check("An app link carries the Crowdlock's file link, and gives it back", app.startsWith("crowdlock://add?url=") && fileUrlFromOpenLink(app) === kopUrl);
+check("An app link to anything but an https file link is ignored",
+  fileUrlFromOpenLink("crowdlock://add?url=" + encodeURIComponent("http://x.example/c.json")) === null
+    && fileUrlFromOpenLink("https://example.com") === null && fileUrlFromOpenLink("crowdlock://add?url=%E0%A4%A") === null);
+check("Sharing The Kop Fund sends people to its join page", kop.ok && shareLinkFor(kop) === "https://jimbus9.github.io/fanfund/join/");
+check("A Crowdlock naming no page is shared as its site", test.ok && shareLinkFor(test) === SITE);
 
 console.log("-".repeat(80));
 console.log(failures === 0 ? "The app's Crowdlock loader accepts the real files and refuses doctored ones." : `${failures} check(s) failed.`);

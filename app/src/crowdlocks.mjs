@@ -100,6 +100,35 @@ export async function loadCrowdlock(url, fetchImpl = globalThis.fetch) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Sharing a Crowdlock
+//
+// crowdlock://add?url=<the Crowdlock file's link> opens this app straight onto
+// that Crowdlock, checked like any other before it is shown. A phone's own
+// camera reads it from a QR code; a web page can use it as a button. It only
+// ever carries a link — the app decides nothing from it but where to look.
+// ---------------------------------------------------------------------------
+
+/** The app link that opens a Crowdlock in the app. */
+export function openLinkFor(fileUrl) {
+  return `crowdlock://add?url=${encodeURIComponent(fileUrl)}`;
+}
+
+/** The Crowdlock file link inside an app link, or null if it isn't one. */
+export function fileUrlFromOpenLink(link) {
+  const m = /^crowdlock:\/\/add\?url=([^&#\s]+)/i.exec(String(link ?? "").trim());
+  if (!m) return null;
+  let u;
+  try { u = decodeURIComponent(m[1]); } catch { return null; }
+  return LINK.test(u) ? u : null;
+}
+
+/** Where to send people when sharing: the Crowdlock's own page if it names one, else its site. */
+export function shareLinkFor(loaded) {
+  const site = loaded.crowdlock?.site;
+  return typeof site === "string" && /^https:\/\//.test(site) ? site : baseFor(loaded.url);
+}
+
 /** Is this address a member, and which number? */
 export function membershipOf(register, address) {
   const a = String(address).toLowerCase();

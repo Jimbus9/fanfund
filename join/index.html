@@ -73,6 +73,7 @@
     <span class="eyebrow">Five minutes, no money</span>
     <h1>Join</h1>
     <p class="lede">Joining means signing one line of text with a bitcoin wallet. It costs nothing, moves nothing, and commits you to no payment ever. Putting money behind it is a separate decision, taken later or never.</p>
+    <p class="note" id="openInApp" hidden>Have the Crowdlock app? <a id="openInAppLink" href="#">Open this Crowdlock in it</a> and sign there in one tap.</p>
   </header>
 
   <section>
@@ -306,6 +307,10 @@ async function loadCrowdlock() {
     ENDPOINT = typeof c.join_endpoint === "string" && /^https:\/\//.test(c.join_endpoint) ? c.join_endpoint : null;
     RELAYS = Array.isArray(c.relays) && c.relays.length ? c.relays : null;
     FINGERPRINT = c.declaration.sha256;
+    // The app opens straight onto this Crowdlock from a crowdlock:// link.
+    const fileUrl = new URL(`../crowdlocks/${name}.json`, location.href).href;
+    el("openInAppLink").href = `crowdlock://add?url=${encodeURIComponent(fileUrl)}`;
+    el("openInApp").hidden = false;
     el("statement").textContent = STATEMENT;
     el("paramStatus").innerHTML =
       `Signing <strong>${c.declaration.title} v${c.declaration.version}</strong> ` +

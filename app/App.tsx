@@ -17,7 +17,7 @@
 // through src/wallet/core.mjs, and nothing else may.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Linking, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -38,7 +38,7 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
-  locksOnRegister, submitLock,
+  locksOnRegister, submitLock, openLinkFor, fileUrlFromOpenLink, shareLinkFor,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
 import { postToRelays } from "./src/relays.mjs";
@@ -57,15 +57,41 @@ type Screen =
   | { name: "home"; words: string }
   | { name: "send"; words: string }
   | { name: "crowdlock"; words: string; url: string }
-  | { name: "addCrowdlock"; words: string }
+  | { name: "addCrowdlock"; words: string; link?: string }
   | { name: "startCrowdlock"; words: string };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>({ name: "loading" });
+  const [screen, setScreenRaw] = useState<Screen>({ name: "loading" });
+  // A Crowdlock link the app was opened with (crowdlock://add?url=…, from a
+  // QR code or a web page's button). Held until there is a wallet to add it
+  // to, then opened in Add a Crowdlock, where it is checked like any other.
+  const pending = useRef<string | null>(null);
+
+  const setScreen = useCallback((next: Screen) => {
+    if (next.name === "home" && pending.current) {
+      const link = pending.current; pending.current = null;
+      setScreenRaw({ name: "addCrowdlock", words: next.words, link });
+      return;
+    }
+    setScreenRaw(next);
+  }, []);
 
   useEffect(() => {
-    loadWords().then((w) => setScreen(w ? { name: "home", words: w } : { name: "welcome" }));
-  }, []);
+    // Opened by a link: note it, then show the first screen once; "home" picks
+    // the link up. A link arriving while the app is open is opened at once if
+    // there is a wallet, or waits for one.
+    Linking.getInitialURL().then((u) => {
+      pending.current = fileUrlFromOpenLink(u ?? null);
+      loadWords().then((w) => setScreen(w ? { name: "home", words: w } : { name: "welcome" }));
+    });
+    const sub = Linking.addEventListener("url", (e) => {
+      const file = fileUrlFromOpenLink(e.url);
+      if (!file) return;
+      pending.current = file;
+      loadWords().then((w) => { if (w) setScreen({ name: "home", words: w }); });
+    });
+    return () => sub.remove();
+  }, [setScreen]);
 
   return (
     <SafeAreaProvider>
@@ -81,7 +107,7 @@ export default function App() {
           {screen.name === "home" && <Home words={screen.words} go={setScreen} />}
           {screen.name === "send" && <Send words={screen.words} go={setScreen} />}
           {screen.name === "crowdlock" && <CrowdlockScreen words={screen.words} url={screen.url} go={setScreen} />}
-          {screen.name === "addCrowdlock" && <AddCrowdlock words={screen.words} go={setScreen} />}
+          {screen.name === "addCrowdlock" && <AddCrowdlock key={screen.link ?? "add"} words={screen.words} link={screen.link} go={setScreen} />}
           {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
@@ -467,6 +493,13 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
 
       {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} />}
 
+      <Text style={s.h2}>Share it</Text>
+      <Text style={s.p}>Anyone with the app can point their phone's camera at this code to open it.</Text>
+      <View style={s.qr}><QRCode value={openLinkFor(c.url)} size={200} /></View>
+      <Button label="Share a link" kind="plain" onPress={() => Share.share({
+        message: `${c.crowdlock.name} — a Crowdlock. Nobody pools money, and nobody gets anything financial back. Have a look: ${shareLinkFor(c)}`,
+      })} />
+
       <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
     </View>
   );
@@ -758,14 +791,17 @@ function when(locktime: number) {
   return `${date}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function AddCrowdlock({ words, go }: { words: string; go: Go }) {
-  const [link, setLink] = useState("");
+function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?: string }) {
+  const [link, setLink] = useState(given ?? "");
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[] | null>(null);
 
-  const add = async () => {
+  // Opened from a QR code or a web page: check it straight away.
+  useEffect(() => { if (given) add(given); }, [given]);
+
+  const add = async (which: string = link) => {
     setBusy(true); setProblems(null);
-    const loaded: Loaded = await loadCrowdlock(link);
+    const loaded: Loaded = await loadCrowdlock(which);
     setBusy(false);
     if (!loaded.ok) { setProblems(loaded.problems); return; }
     const added = await loadAddedCrowdlocks();
@@ -779,7 +815,8 @@ function AddCrowdlock({ words, go }: { words: string; go: Go }) {
       <Text style={s.p}>Paste the link to a Crowdlock's file. It is checked on this phone, the same way the register page checks it, before it is added.</Text>
       <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} placeholder="https://…/crowdlocks/name.json" value={link} onChangeText={(t) => { setLink(t); setProblems(null); }} />
       {problems && <><Text style={s.error}>Refused:</Text>{problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}</>}
-      <Button label={busy ? "Checking…" : "Check and add"} disabled={busy || !link} onPress={add} />
+      <Button label={busy ? "Checking…" : "Check and add"} disabled={busy || !link} onPress={() => add()} />
+      <Text style={s.note}>Someone showing you a Crowdlock's QR code? Point your phone's own camera at it — it opens here by itself.</Text>
       <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
     </View>
   );
