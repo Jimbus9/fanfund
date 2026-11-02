@@ -31,7 +31,8 @@ A published document containing, at a minimum:
 | Field | |
 | --- | --- |
 | `destination` | A single address, which **must** already be on the published destinations list — see the destinations format |
-| `requires` | The amount needed, in pounds, and what it buys |
+| `requires` | The amount needed, in the seller's own currency, and what it buys |
+| `currency` | Which currency `requires` is in — an ISO 4217 three-letter code, in capitals |
 | `target` | The equivalent in bitcoin, at a stated rate and moment |
 | `opens` / `closes` | The gathering window. `closes` is a deadline, not a duration |
 | `settles_by` | The last date on which any commitment to this proposal may be completed |
@@ -55,7 +56,7 @@ reasons — readable by eye, and beginning with this instance's declaration hash
 so a proposal cannot be replayed into another Crowdlock:
 
 ```
-<instance>|proposal|<destination>|<requires in pence>|<document>|<opens>|<closes>|<settles_by>
+<instance>|proposal|<destination>|<requires>|<currency>|<document>|<opens>|<closes>|<settles_by>
 ```
 
 SHA-256 of that line, UTF-8, NFC normalised, no trailing newline. Built by
@@ -68,8 +69,28 @@ belongs in its prose, which is referenced by `document` — the SHA-256 of that
 prose — and so is bound into the hash without having to be squeezed into a
 line.
 
-**`requires` is in whole pence**, because it is somebody else's invoice and
-floating-point pounds do not hash reliably.
+**`requires` is a whole number of the currency's minor units** — pence for
+GBP, cents for USD and EUR, whole yen for JPY, which has none, thousandths for
+KWD — because floating-point money does not hash reliably. **`currency` is an
+ISO 4217 three-letter code in capitals.** It is refused in lower case rather
+than quietly corrected: silently rewriting what the proposal's author wrote
+would mean the document they published and the line we hashed were not the
+same bytes, which is the one thing this section exists to prevent.
+
+**The currency field was added on 2 November 2026, and until then this line
+had none.** The amount was simply "pence", which made a document that
+describes a general mechanism into a British one: a Crowdlock run by
+supporters anywhere else could not state what their purchase cost. No
+proposal had been written anywhere, by anyone, so the change cost nothing;
+after the first one existed it would have invalidated every commitment
+already signed. The rule it illustrates is worth more than the fix —
+**anything in these documents that assumes one country is a defect, and the
+cheapest moment to find it is before anybody has used it.**
+
+Note which way this cuts, because it looks at first like a contradiction of
+the paragraph below. A currency belongs in the hash for the same reason the
+price does: **once the proposal is written, it never moves.** The thing that
+is kept out is the thing that changes.
 
 **`target` is deliberately absent.** It moves with the bitcoin price, and a
 proposal whose hash changed every time bitcoin moved would invalidate every
@@ -86,7 +107,7 @@ cannot be confirmed in time. The margin is built into the figure when the
 proposal is written rather than handled by a further round of gathering.
 
 **This is not a breach of the counting rule.** That document forbids publishing a
-pound figure as authoritative *about the fund*. A seller's price is not a
+currency figure as authoritative *about the fund*. A seller's price is not a
 description of the fund; it is a bill. The distinction matters: our own size is
 measured in bitcoin because a price source must not sit inside it, while
 somebody else's invoice is denominated in whatever they asked for.

@@ -11,11 +11,12 @@ by a stranger. This is the document that makes that possible.
 
 ## The unit of account is bitcoin
 
-The authoritative figure is in **BTC**, not pounds.
+The authoritative figure is in **BTC**, never in a national currency.
 
-A pound figure may be shown alongside it, and when it is, it must be marked as
-an indicative conversion at the time of display. It is never the headline and
-it is never archived as a fact.
+A figure in money may be shown alongside it — pounds here, whatever is local
+to an instance elsewhere — and when it is, it must be marked as an indicative
+conversion at the time of display. It is never the headline and it is never
+archived as a fact.
 
 The reason is not ideology. Priced in pounds, an ordinary fall in the bitcoin
 price appears to shrink the movement while the target stands still, and nobody
@@ -155,7 +156,7 @@ cannot be funded. That exists only once a stake does, and is not specified here.
   lock.
 - **A peak or record figure.** Only the present matters. A record flatters and
   is not load-bearing.
-- **Any pound figure presented as authoritative** rather than as an indicative
+- **Any money figure presented as authoritative** rather than as an indicative
   conversion at a stated moment.
 
 ## Amendments

@@ -206,7 +206,8 @@ line();
 const P = {
   instance: INSTANCE,
   destination: DEST,
-  requiresPence: 440_000_000_00,
+  requiresMinor: 440_000_000_00,
+  currency: "GBP",
   document: createHash("sha256").update("the proposal's prose").digest("hex"),
   opens: "2026-11-21T00:00:00Z",
   closes: "2026-12-19T00:00:00Z",
@@ -223,7 +224,10 @@ check("The same proposal hashes the same way twice", proposalHash(P) === proposa
 check("A different destination is a different proposal",
   proposalHash(P) === proposalHash({ ...P, destination: OTHER }), false);
 check("A different price is a different proposal",
-  proposalHash(P) === proposalHash({ ...P, requiresPence: P.requiresPence + 1 }), false);
+  proposalHash(P) === proposalHash({ ...P, requiresMinor: P.requiresMinor + 1 }), false);
+check("The same number in another currency is a different proposal",
+  proposalHash(P) === proposalHash({ ...P, currency: "USD" }), false,
+  "or forty million dollars and forty million pounds would share a hash");
 check("A different prose document is a different proposal",
   proposalHash(P) === proposalHash({ ...P, document: "f".repeat(64) }), false);
 check("The same proposal under another Crowdlock is a different proposal",
@@ -234,8 +238,14 @@ const refusesProposal = (what, p, why) => check(what,
   (() => { try { proposalLine(p); return false; } catch { return true; } })(), true, why);
 
 refusesProposal("A proposal with no instance", { ...P, instance: undefined }, "every proposal is bound to its declaration");
-refusesProposal("A pound figure that is not whole pence", { ...P, requiresPence: 12.5 }, "pence are integers");
-refusesProposal("A negative price", { ...P, requiresPence: -1 });
+refusesProposal("A price that is not whole minor units", { ...P, requiresMinor: 12.5 }, "floating-point money does not hash reliably");
+refusesProposal("A negative price", { ...P, requiresMinor: -1 });
+refusesProposal("A proposal naming no currency", { ...P, currency: undefined },
+  "an amount with no currency is not a price");
+refusesProposal("A currency in lower case", { ...P, currency: "gbp" },
+  "refused rather than silently corrected, so the published document and the hashed line are the same bytes");
+refusesProposal("A currency that is not three letters", { ...P, currency: "POUNDS" });
+refusesProposal("A currency with a digit in it", { ...P, currency: "GB1" });
 refusesProposal("A pipe smuggled into a field", { ...P, destination: "bc1q|evil" }, "or the line could be forged by punctuation");
 refusesProposal("A window that closes before it opens", { ...P, closes: "2026-11-01T00:00:00Z" });
 refusesProposal("Settlement before the window closes", { ...P, settlesBy: "2026-12-01T00:00:00Z" });

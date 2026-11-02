@@ -232,21 +232,41 @@ export function destinationIsPermitted({
  * proposal wants to say belongs in its prose, which is linked by `document`
  * and hashed as part of this line.
  *
- * `requires` is in pounds, because it is somebody else's invoice. `target` is
- * in satoshis and is indicative, restated as the price moves — so it is NOT
- * in this line. A proposal whose hash changed every time bitcoin moved would
- * invalidate every commitment gathered so far, which is the exact failure
- * that sank the assurance-contract design.
+ * `requires` is somebody else's invoice, so it is in THEIR money, and the
+ * currency is named in the line beside it. It was pence with no currency
+ * field until 2 November, which quietly made this a British document: a
+ * Crowdlock run anywhere else could not state its own price at all. The
+ * currency is an ISO 4217 three-letter code, and the amount is a whole
+ * number of that currency's minor units — pence for GBP, cents for USD and
+ * EUR, whole yen for JPY (which has none), thousandths for KWD. Integers
+ * because floating-point money does not hash reliably.
+ *
+ * Note which way round that cuts. A currency belongs in the line precisely
+ * because it NEVER MOVES once the proposal is written, the same as the
+ * price. `target` — the equivalent in satoshis — is indicative and restated
+ * as bitcoin moves, so it is NOT in this line. A proposal whose hash changed
+ * every time bitcoin moved would invalidate every commitment gathered so
+ * far, which is the exact failure that sank the assurance-contract design.
  */
-export function proposalLine({ instance, destination, requiresPence, document, opens, closes, settlesBy }) {
+export function proposalLine({ instance, destination, requiresMinor, currency, document, opens, closes, settlesBy }) {
   if (!/^[0-9a-f]{64}$/.test(instance ?? "")) {
     throw new Error("instance must be a 64-character hex declaration hash");
   }
   if (!/^[0-9a-f]{64}$/.test(document ?? "")) {
     throw new Error("document must be the 64-character hex hash of the proposal's prose");
   }
-  if (!Number.isInteger(requiresPence) || requiresPence <= 0) {
-    throw new Error("requires must be a positive whole number of pence");
+  if (!Number.isInteger(requiresMinor) || requiresMinor <= 0) {
+    throw new Error("requires must be a positive whole number of the currency's minor units");
+  }
+  // Three uppercase letters, and no list of real codes. A hard-coded list
+  // ages into refusing a currency that exists, which is a worse failure than
+  // accepting one that does not — a wrong code is visible to every reader of
+  // the proposal, whereas a refusal would be ours and permanent. Lowercase is
+  // refused rather than quietly upper-cased: silently rewriting the writer's
+  // input would mean the document they published and the line we hashed were
+  // not the same bytes, which is the whole thing this function exists to stop.
+  if (!/^[A-Z]{3}$/.test(currency ?? "")) {
+    throw new Error("currency must be an ISO 4217 three-letter code in capitals, e.g. GBP");
   }
   for (const [name, v] of [["destination", destination], ["opens", opens], ["closes", closes], ["settlesBy", settlesBy]]) {
     if (typeof v !== "string" || !v) throw new Error(`${name} is required`);
@@ -255,7 +275,7 @@ export function proposalLine({ instance, destination, requiresPence, document, o
   if (!(Date.parse(opens) < Date.parse(closes))) throw new Error("closes must be after opens");
   if (!(Date.parse(closes) <= Date.parse(settlesBy))) throw new Error("settlesBy must be at or after closes");
 
-  return `${instance}|proposal|${destination}|${requiresPence}|${document}|${opens}|${closes}|${settlesBy}`;
+  return `${instance}|proposal|${destination}|${requiresMinor}|${currency}|${document}|${opens}|${closes}|${settlesBy}`;
 }
 
 /** The hash a commitment names, and the only thing that identifies a proposal. */
