@@ -199,6 +199,21 @@ check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
   check("Every co-signer key this repository publishes is a real public key", bad.length === 0, bad.join(", "));
 }
 
+// Warning members when a Crowdlock's co-signer keys change.
+{
+  const { keyChanges, historyLinkFor } = await import("../src/crowdlocks.mjs");
+  const A = "02" + "a".repeat(64), B = "03" + "b".repeat(64);
+  check("The first look sets the baseline, with nothing to warn about", !keyChanges(null, [A]).changed);
+  check("The same keys: no warning", !keyChanges([A], [A]).changed);
+  const ch = keyChanges([A], [A, B]);
+  check("An added key is caught", ch.changed && ch.added[0] === B && ch.removed.length === 0);
+  const gone = keyChanges([A, B], [B]);
+  check("A removed key is caught", gone.changed && gone.removed[0] === A && gone.added.length === 0);
+  check("A key swapped for its mirror (02 to 03) isn't a change", !keyChanges([A], ["03" + "a".repeat(64)]).changed);
+  check("The warning links to the file's public history",
+    historyLinkFor("https://somefan.github.io/the-pub-fund/crowdlocks/the-pub-fund.json") === "https://github.com/somefan/the-pub-fund/commits/main/crowdlocks/the-pub-fund.json");
+}
+
 // Sharing
 const kopUrl = `${SITE}crowdlocks/kop-fund.json`;
 const app = openLinkFor(kopUrl);

@@ -274,6 +274,26 @@ export function newestCosigner(crowdlock) {
   return keys.length ? keys[keys.length - 1] : undefined;
 }
 
+/**
+ * What changed in a Crowdlock's co-signer keys since this phone last looked.
+ * `seen` is the list it saw then, or null the first time (nothing to compare,
+ * so nothing to warn about). Compared on the x-coordinate, as the checks are.
+ */
+export function keyChanges(seen, now) {
+  if (!Array.isArray(seen)) return { added: [], removed: [], changed: false };
+  const x = (list) => new Set((list ?? []).map((k) => String(k).toLowerCase().slice(2)));
+  const before = x(seen), after = x(now);
+  const added = (now ?? []).filter((k) => !before.has(String(k).toLowerCase().slice(2)));
+  const removed = seen.filter((k) => !after.has(String(k).toLowerCase().slice(2)));
+  return { added, removed, changed: added.length + removed.length > 0 };
+}
+
+/** The public history of a Crowdlock's file on GitHub, where any key change shows who made it. */
+export function historyLinkFor(fileUrl) {
+  const where = repoFromFileUrl(fileUrl), path = pathInRepo(fileUrl);
+  return where && path ? `https://github.com/${where.owner}/${where.repo}/commits/main/${path}` : null;
+}
+
 /** Where a Crowdlock's file sits inside its repository, from its link. */
 export function pathInRepo(fileUrl) {
   const m = /^https:\/\/[a-z0-9-]+\.github\.io\/[A-Za-z0-9._-]+\/(.+)$/i.exec(String(fileUrl ?? ""));

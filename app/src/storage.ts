@@ -62,3 +62,19 @@ export async function saveLock(lock: SavedLock): Promise<void> {
 export async function forgetSavedLocks(): Promise<void> {
   await SecureStore.deleteItemAsync(LOCKS);
 }
+
+// The co-signer keys this phone last saw for each Crowdlock, so it can say when
+// they change. Not secret. A change is a public commit anyone can read; this is
+// what makes somebody look at it.
+const SEEN_KEYS = "crowdlock.seenkeys.v1";
+
+export async function loadSeenKeys(url: string): Promise<string[] | null> {
+  try { return JSON.parse((await SecureStore.getItemAsync(SEEN_KEYS)) ?? "{}")[url] ?? null; } catch { return null; }
+}
+
+export async function saveSeenKeys(url: string, keys: string[]): Promise<void> {
+  let all: Record<string, string[]> = {};
+  try { all = JSON.parse((await SecureStore.getItemAsync(SEEN_KEYS)) ?? "{}"); } catch {}
+  all[url] = keys;
+  await SecureStore.setItemAsync(SEEN_KEYS, JSON.stringify(all));
+}

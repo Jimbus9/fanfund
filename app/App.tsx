@@ -43,15 +43,14 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
-  locksOnRegister, submitLock, newestCosigner, pathInRepo, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
+  locksOnRegister, submitLock, newestCosigner, pathInRepo, keyChanges, historyLinkFor, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
   repoFromFileUrl, versionStatus, changesSince, baseFor,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
 import { postToRelays, announce, fetchAnnouncements } from "./src/relays.mjs";
 import {
   loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
-  loadSavedLocks, saveLock, forgetSavedLocks,
-} from "./src/storage";
+  loadSavedLocks, saveLock, forgetSavedLocks, loadSeenKeys, saveSeenKeys } from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
 type Screen =
@@ -432,11 +431,18 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
   const [gbp, setGbp] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [keyChange, setKeyChange] = useState<{ added: string[]; removed: string[] } | null>(null);
 
   const load = useCallback(async () => {
     const loaded: Loaded = await loadCrowdlock(url);
     setC(loaded);
     if (loaded.ok) {
+      // Has anyone changed its co-signer keys since this phone last looked?
+      const keys: string[] = loaded.crowdlock.cosigner_keys ?? [];
+      const seen = await loadSeenKeys(url);
+      const ch = keyChanges(seen, keys);
+      if (seen === null) await saveSeenKeys(url, keys).catch(() => {});
+      setKeyChange(ch.changed ? { added: ch.added, removed: ch.removed } : null);
       committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
       poundsPerBtc(loaded.crowdlock).then(setGbp);
     }
@@ -511,7 +517,17 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
             </>}
       {result && <Text style={result.ok ? s.good : s.error}>{result.text}</Text>}
 
-      {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} />}
+      {keyChange && <View style={s.panel}>
+        <Text style={s.error}>This Crowdlock's co-signer keys have changed since you last looked.</Text>
+        {keyChange.added.map((k) => <Text key={k} style={s.note}>Added: {k.slice(0, 10)}…{k.slice(-8)}{k === newestCosigner(c.crowdlock) ? " — new locks would use this one" : ""}</Text>)}
+        {keyChange.removed.map((k) => <Text key={k} style={s.note}>Removed: {k.slice(0, 10)}…{k.slice(-8)} — locks naming it no longer count</Text>)}
+        <Text style={s.note}>Founders add keys for good reasons, but a co-signer decides which purchases go ahead, so a key you don't recognise matters. Check with the founder that it was them. Every change is public, with the name of the account that made it.</Text>
+        {historyLinkFor(c.url) && <Button label="See who changed it" kind="plain" onPress={() => Linking.openURL(historyLinkFor(c.url)!)} />}
+        <Text style={s.note}>New locks are paused on this phone until you've looked. Taking money home isn't affected.</Text>
+        <Button label="I've checked — carry on" onPress={async () => { await saveSeenKeys(url, c.crowdlock.cosigner_keys ?? []).catch(() => {}); setKeyChange(null); }} />
+      </View>}
+
+      {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} paused={!!keyChange} />}
 
       <LookAfter c={c} account={account} onChange={load} />
 
@@ -538,7 +554,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
 type LockTerms = { address: string; locktime: number; cosignerPubkey: string };
 type LockRow = LockTerms & { state: string; confirmed: bigint; arriving: bigint; onRegister: boolean; note?: string };
 
-function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { ok: true }>; onChange: () => void }) {
+function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Extract<Loaded, { ok: true }>; onChange: () => void; paused?: boolean }) {
   // New locks name the newest key; older ones stay listed for the locks that name them.
   const cosigner: string | undefined = newestCosigner(c.crowdlock);
   const minimum = BigInt(c.crowdlock.minimum_counted_lock_sats);
@@ -734,7 +750,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
           {lengths.some((y) => y < 1) && <Text style={s.note}>The test network's clock can run ahead of real time, so a short test lock may unlock early. Real bitcoin's never does.</Text>}
           <Button
             label={busy === "lock" ? "Locking…" : chosen.amount === "all" ? "Lock everything waiting" : `Lock ${btc(chosen.shown)}`}
-            disabled={busy !== null || !!chosen.problem} onPress={lockIt}
+            disabled={busy !== null || !!chosen.problem || paused} onPress={lockIt}
           />
         </View>
       ) : (
@@ -759,7 +775,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
           {r.state === "arriving" && <Text style={s.note}>{viaRelays ? "Posted to the relays; goes on the register once it confirms." : "Goes on the register once it confirms."}</Text>}
           <Text style={[s.mono, { fontSize: 12 }]} selectable>{r.address}</Text>
           {r.state === "lapsed" && renewing !== r.address && <>
-            <Button label="Lock it again" disabled={busy !== null} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
+            <Button label="Lock it again" disabled={busy !== null || paused} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
             <Button label={busy === r.address ? "Sending…" : "Take it home"} kind="plain" disabled={busy !== null} onPress={() => home(r)} />
           </>}
           {r.state === "lapsed" && renewing === r.address && <>
@@ -780,7 +796,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
             <Text style={s.note}>New date: {when(lockDate(renewYears))}.</Text>
             <Button
               label={busy === r.address ? "Locking…" : `Lock ${btc(r.confirmed + (addWaiting && waiting ? waiting.confirmed : 0n))} again`}
-              disabled={busy !== null} onPress={() => lockAgain(r)}
+              disabled={busy !== null || paused} onPress={() => lockAgain(r)}
             />
             <Button label="Not now" kind="plain" disabled={busy !== null} onPress={() => setRenewing(null)} />
           </>}
@@ -1017,7 +1033,9 @@ function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded
     try {
       await withSignIn(async (token) => {
         if (!(await canWrite(token, owner, repo))) throw new Error("Only this Crowdlock's founder and its maintainers can change it, and the GitHub account you signed in with isn't one of them.");
-        await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
+        const r = await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
+        // You made this change, so this phone needn't warn you about it.
+        await saveSeenKeys(c.url, r.keys).catch(() => {});
         setKey("");
         setMsg({ ok: true, text: "Added. Its website updates in a minute or two — then tap Refresh and new locks will use it." });
         setTimeout(onChange, 90000);
