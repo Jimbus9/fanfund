@@ -1,0 +1,27 @@
+# Post a registration for a brand-new test member to the test Crowdlock's
+# relays — exactly what a member's phone does — so the relay inbox, already
+# running, can be seen to collect it ("Member N (via relays)" appears within a
+# few minutes). A proof the whole route works end to end, runnable any time
+# without touching the inbox's own run. Test Crowdlocks only: the script
+# refuses real bitcoin.
+
+name: Relay self-test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Post a new test member's registration to the relays
+        working-directory: method/relay
+        run: npm ci --no-audit --no-fund && node selftest.mjs kop-fund-testnet4
