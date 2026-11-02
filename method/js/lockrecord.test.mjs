@@ -116,8 +116,13 @@ const refuses = (what, result, expect) => {
   check(what, ok, result.ok ? "ACCEPTED IT" : result.reason.slice(0, 44));
 };
 
-refuses("No co-signer published yet (The Kop Fund today)",
-  prepareLock(good, { ...ctx, crowdlock: kop }), "not published a co-signer key");
+// A Crowdlock refuses every lock until it publishes a co-signer key, because
+// a lock names one and there is nothing yet to name. This used to read The
+// Kop Fund's own file, which had an empty list — so the day James published
+// his key, 2 November, a correct change turned the suite red. A test of a
+// behaviour should not depend on live data that is expected to change.
+refuses("A Crowdlock that has published no co-signer key yet",
+  prepareLock(good, { ...ctx, crowdlock: { ...kop, cosigner_keys: [] } }), "not published a co-signer key");
 refuses("A co-signer key that is not this Crowdlock's",
   prepareLock({ ...good, cosigner_pubkey: STRANGER }, ctx), "not this Crowdlock's");
 refuses("Owner and co-signer the same key",
