@@ -49,8 +49,8 @@ check("…and it knows member 1", kop.ok && membershipOf(kop.register, "BC1QX22L
 
 const test = await loadCrowdlock(`${SITE}crowdlocks/kop-fund-testnet4.json`, siteFetch());
 check("The test Crowdlock loads and passes every check", test.ok, test.ok ? test.crowdlock.network : test.problems.join("; "));
-check("…it is on testnet4, with its own join endpoint",
-  test.ok && test.crowdlock.network === "testnet4" && test.crowdlock.join_endpoint.includes("?c=kop-fund-testnet4"));
+check("…it is on testnet4, and takes registrations through its relays, not an endpoint",
+  test.ok && test.crowdlock.network === "testnet4" && test.crowdlock.relays.length > 0 && !test.crowdlock.join_endpoint);
 check("…and a different declaration from The Kop Fund", test.ok && kop.ok && test.statement !== kop.statement);
 check("Both are on the app's starting list", STARTING_LIST.length === 2);
 
