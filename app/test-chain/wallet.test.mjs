@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, NETWORKS, DUST_SATS,
-  signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock,
+  signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock, newCosignerWords, cosignerKeyFromWords,
 } from "../src/wallet/core.mjs";
 import { lockAddress } from "../../js/lockrecord.mjs";
 import { verifyMembership } from "../../js/verify.mjs";
@@ -64,6 +64,25 @@ const vector = "abandon abandon abandon abandon abandon abandon abandon abandon 
 check("The standard BIP84 test words give the standard first address",
   accountFromWords(vector, "mainnet").address === "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
   accountFromWords(vector, "mainnet").address);
+
+// ---------------------------------------------------------------------------
+rule("A CO-SIGNER KEY OF ITS OWN");
+
+// The published BIP84 test words give this key at m/84'/0'/0'/0/0 — in the
+// standard, in cosigner/generate.mjs, and so in Sparrow or Electrum. The app
+// must agree, or a co-signer's paper would restore to a different key.
+check("The standard test words give the standard co-signer key (same as cosigner/generate.mjs)",
+  cosignerKeyFromWords(vector).publicKey === "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c");
+const coWords = newCosignerWords();
+check("A new co-signer key has its own 24 words", coWords.split(" ").length === 24 && wordsAreValid(coWords) && coWords !== words);
+check("The same words always give the same key, typed messily or not",
+  cosignerKeyFromWords(`  ${coWords.toUpperCase()} `).publicKey === cosignerKeyFromWords(coWords).publicKey);
+// The standard slot is shared with an ordinary wallet's first address, so the
+// SAME words would make the same key: a co-signer must always have words of
+// its own. The app makes fresh ones, refuses a wallet's words as co-signer
+// words, and every lock refuses a co-signer that is its owner's key.
+check("Wallet words in the co-signer slot would be the wallet's own key — which is why they must differ",
+  cosignerKeyFromWords(words).publicKey === accountFromWords(words, "mainnet").publicKey);
 
 // ---------------------------------------------------------------------------
 rule("SIGNING A DECLARATION (milestone 2)");

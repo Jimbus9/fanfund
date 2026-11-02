@@ -123,6 +123,33 @@ export function cosignerFromWords(text, network = "mainnet") {
 }
 
 // ---------------------------------------------------------------------------
+// A co-signer key of its own
+//
+// The key that co-signs purchases for a Crowdlock. It has its own 24 words,
+// never the member's, and sits at the ordinary first-address slot of a
+// standard wallet — m/84'/0'/0'/0/0, the same as cosigner/generate.mjs — so
+// the same words give the same key here, in that script, in Sparrow or in
+// Electrum, and nothing about it depends on this app. The words are shown
+// once to be written on paper and are never saved; only the public half is
+// published. Making it and signing with it are done with the phone offline.
+// ---------------------------------------------------------------------------
+
+export const COSIGNER_PATH = "m/84'/0'/0'/0/0";
+
+/** Twenty-four new words for a co-signer key, from the phone's secure random source. */
+export function newCosignerWords() {
+  return generateMnemonic(wordlist, 256);
+}
+
+/** The co-signer public key these words make. Same answer as cosigner/generate.mjs. */
+export function cosignerKeyFromWords(text) {
+  const words = tidyWords(text);
+  if (!wordsAreValid(words)) throw new Error("those are not valid backup words — check the spelling and the order");
+  const root = BIP32.fromSeed(mnemonicToSeedSync(words), networks.bitcoin);
+  return { path: COSIGNER_PATH, publicKey: toHex(root.derivePath(COSIGNER_PATH).publicKey) };
+}
+
+// ---------------------------------------------------------------------------
 // What the chain says
 // ---------------------------------------------------------------------------
 

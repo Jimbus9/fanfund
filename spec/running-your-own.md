@@ -137,6 +137,34 @@ serves every instance. `node js/crowdlock.test.mjs` checks every file listed in
 `crowdlocks/index.json`: that it is complete, that its declaration really hashes
 to the fingerprint it claims, and that its register files agree with it.
 
+## Making a co-signer key
+
+A co-signer key is an ordinary bitcoin key: **24 words of its own**, at the
+first address of a standard native segwit wallet, `m/84'/0'/0'/0/0`. Nothing
+about it belongs to any one program, so make it whichever way you trust:
+
+- **The Crowdlock app**, under *Make a co-signer key*, with the phone in
+  airplane mode.
+- **`cosigner/generate.mjs`** in this repository, on a computer that is
+  offline.
+- **Sparrow or Electrum**: make a new native segwit wallet, write down its
+  words, and take the public key of its first receiving address.
+
+The same words give the same key in all three — the app's tests check this
+against the published BIP84 example. Publish only the public key, in
+`cosigner_keys`. The words go on paper, twice, one copy kept away from the
+other; they are never saved on a device.
+
+**Never use a wallet's own words.** At this standard slot they would make the
+wallet's own key, and a lock refuses a co-signer that is its owner.
+
+What the key can do: add the second signature to commitments members have
+already signed, to destinations already attested — nothing else. It cannot
+take or keep anybody's money. Lose it and no purchase can happen, but every
+lock still goes home on its date. Signing, when a proposal is funded, can be
+done the same three ways, because commitments are standard partially signed
+transactions in the published format.
+
 ## Several Crowdlocks side by side
 
 One site, or one app, can carry as many Crowdlocks as people add. Add your file

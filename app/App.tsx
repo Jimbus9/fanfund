@@ -26,7 +26,7 @@ import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement,
-  lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords,
+  lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords, newCosignerWords, cosignerKeyFromWords, COSIGNER_PATH,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain modules shared with the tests
 import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS } from "./src/start.mjs";
@@ -64,7 +64,8 @@ type Screen =
   | { name: "crowdlock"; words: string; url: string }
   | { name: "addCrowdlock"; words: string; link?: string }
   | { name: "startCrowdlock"; words: string }
-  | { name: "findCrowdlocks"; words: string };
+  | { name: "findCrowdlocks"; words: string }
+  | { name: "cosignerKey"; words: string };
 
 export default function App() {
   const [screen, setScreenRaw] = useState<Screen>({ name: "loading" });
@@ -116,6 +117,7 @@ export default function App() {
           {screen.name === "addCrowdlock" && <AddCrowdlock key={screen.link ?? "add"} words={screen.words} link={screen.link} go={setScreen} />}
           {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
           {screen.name === "findCrowdlocks" && <FindCrowdlocks words={screen.words} go={setScreen} />}
+          {screen.name === "cosignerKey" && <CosignerKey words={screen.words} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -280,6 +282,7 @@ function Home({ words, go }: { words: string; go: Go }) {
       <Button label="Find Crowdlocks" onPress={() => go({ name: "findCrowdlocks", words })} />
       <Button label="Add a Crowdlock" kind="plain" onPress={() => go({ name: "addCrowdlock", words })} />
       <Button label="Start a Crowdlock" kind="plain" onPress={() => go({ name: "startCrowdlock", words })} />
+      <Button label="Make a co-signer key" kind="plain" onPress={() => go({ name: "cosignerKey", words })} />
       <Button label="Remove wallet from this phone" kind="danger" onPress={remove} />
     </View>
   );
@@ -829,6 +832,105 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
       <Button label={busy ? "Checking…" : "Check and add"} disabled={busy || !link} onPress={() => add()} />
       <Text style={s.note}>Someone showing you a Crowdlock's QR code? Point your phone's own camera at it — it opens here by itself.</Text>
       <Button label="Back" kind="plain" onPress={() => go({ name: "home", words })} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Making a co-signer key
+//
+// Its own 24 words, shown once to be written on paper and never saved; only
+// the public half leaves the screen, by QR code. The same words make the same
+// key in cosigner/generate.mjs, Sparrow or Electrum, so nothing here is
+// needed to use it later. Done with the phone in airplane mode.
+// ---------------------------------------------------------------------------
+
+function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
+  const [stage, setStage] = useState<"intro" | "show" | "check" | "result" | "existing">("intro");
+  const [coWords, setCoWords] = useState("");
+  const [answers, setAnswers] = useState(["", "", ""]);
+  const [typed, setTyped] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const [pub, setPub] = useState<string | null>(null);
+  const list = coWords.split(" ");
+  const asks = useMemo(() => {
+    const picks = new Set<number>();
+    while (picks.size < 3) picks.add(Math.floor(Math.random() * 24));
+    return [...picks].sort((a, b) => a - b);
+  }, [coWords]);
+  // Leave this screen and the words are gone from memory with it.
+  const leave = () => { setCoWords(""); setTyped(""); setPub(null); go({ name: "home", words: walletWords }); };
+
+  if (stage === "intro") return (
+    <View>
+      <Text style={s.h1}>Make a co-signer key</Text>
+      <Text style={s.p}>A Crowdlock's co-signer adds the second signature that lets a funded purchase go through. The key can't take or keep anyone's money — it can only complete what members already signed for, or refuse.</Text>
+      <Text style={[s.p, s.bold]}>Switch on airplane mode before you start, and leave it on until you've finished.</Text>
+      <Text style={s.note}>You'll get 24 words to write on paper, twice — one copy kept outside your house. Those words are the key. They're never saved on this phone, and the same words work in other wallets (Sparrow, Electrum) or the project's own script, so you never depend on this app. Never use your wallet's own words for this.</Text>
+      <Button label="Make a new co-signer key" onPress={() => { setCoWords(newCosignerWords()); setStage("show"); }} />
+      <Button label="Check words I already have" kind="plain" onPress={() => setStage("existing")} />
+      <Button label="Back" kind="plain" onPress={leave} />
+    </View>
+  );
+
+  if (stage === "show") return (
+    <View>
+      <Text style={s.h1}>Write these down</Text>
+      <Text style={s.p}>On paper, in order, twice. Label each copy so whoever finds it in five years knows what it is:</Text>
+      <Text style={s.mono}>Co-signer key · {new Date().toISOString().slice(0, 10)} · {COSIGNER_PATH}</Text>
+      <View style={s.words}>
+        {list.map((w, i) => <Text key={i} style={s.word}><Text style={s.wordNum}>{i + 1}. </Text>{w}</Text>)}
+      </View>
+      <Text style={s.note}>No screenshots, notes, email or cloud. Once you leave this screen, these words are gone from the phone.</Text>
+      <Button label="I've written them down twice" onPress={() => { setAnswers(["", "", ""]); setStage("check"); }} />
+    </View>
+  );
+
+  if (stage === "check") return (
+    <View>
+      <Text style={s.h1}>Check your paper</Text>
+      <Text style={s.p}>Type these words from what you wrote.</Text>
+      {asks.map((pos, i) => (
+        <View key={pos}>
+          <Text style={s.label}>Word {pos + 1}</Text>
+          <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={answers[i]}
+            onChangeText={(t) => { const a = [...answers]; a[i] = t; setAnswers(a); setProblem(null); }} />
+        </View>
+      ))}
+      {problem && <Text style={s.error}>{problem}</Text>}
+      <Button label="Done" onPress={() => {
+        if (!asks.every((pos, i) => answers[i].trim().toLowerCase() === list[pos])) { setProblem("That doesn't match. Check your paper — if a word is wrong there, go back and copy it again."); return; }
+        setPub(cosignerKeyFromWords(coWords).publicKey); setCoWords(""); setStage("result");
+      }} />
+      <Button label="Show the words again" kind="plain" onPress={() => setStage("show")} />
+    </View>
+  );
+
+  if (stage === "existing") return (
+    <View>
+      <Text style={s.h1}>Check co-signer words</Text>
+      <Text style={s.p}>Type the 24 words from your paper to see the public key they make — the way to prove the paper works.</Text>
+      <TextInput style={[s.input, { minHeight: 120, textAlignVertical: "top" }]} multiline autoCapitalize="none" autoCorrect={false} value={typed} onChangeText={(t) => { setTyped(t); setProblem(null); }} />
+      {problem && <Text style={s.error}>{problem}</Text>}
+      <Button label="Show the key" onPress={() => {
+        if (tidyWords(typed) === tidyWords(walletWords)) { setProblem("Those are this wallet's own words. A co-signer key must have words of its own — otherwise it would be the same key as your member key."); return; }
+        try { setPub(cosignerKeyFromWords(typed).publicKey); setTyped(""); setStage("result"); }
+        catch (e: any) { setProblem(String(e.message ?? e)); }
+      }} />
+      <Button label="Back" kind="plain" onPress={() => setStage("intro")} />
+    </View>
+  );
+
+  return (
+    <View>
+      <Text style={s.h1}>The public half</Text>
+      <Text style={s.p}>This is safe to share. It goes in the Crowdlock's file as its co-signer key. Scan it rather than typing it — a wrong key makes every lock built from it unable to go into a purchase.</Text>
+      <View style={s.qr}><QRCode value={pub ?? ""} size={220} /></View>
+      <Text style={s.mono} selectable>{pub}</Text>
+      <Text style={s.note}>Check what's scanned starts {pub?.slice(0, 6)} and ends {pub?.slice(-6)}.</Text>
+      <Button label="Copy it" kind="plain" onPress={() => pub && Clipboard.setStringAsync(pub)} />
+      <Text style={s.note}>You can switch airplane mode off now. Keep the two paper copies apart.</Text>
+      <Button label="Done" onPress={leave} />
     </View>
   );
 }
