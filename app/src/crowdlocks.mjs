@@ -22,11 +22,9 @@
 import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../../js/crowdlock.mjs";
 import { esploraChain } from "./wallet/esplora.mjs";
 
-/** The links the app starts with. Anything else can be added by the fan. */
-export const STARTING_LIST = [
-  "https://jimbus9.github.io/fanfund/crowdlocks/kop-fund.json",
-  "https://jimbus9.github.io/fanfund/crowdlocks/kop-fund-testnet4.json",
-];
+// This build's starting list and counting-rule link live in ./build.mjs, the
+// one file that differs between builds of the app.
+export { STARTING_LIST, COUNTING_RULE_URL } from "./build.mjs";
 
 // Links are handled as plain text rather than with URL objects: a phone's
 // JavaScript engine has an incomplete URL implementation, and these few rules
@@ -170,7 +168,6 @@ export async function committedTotal(loaded, fetchImpl = globalThis.fetch, now =
  * of the method's general documents, the same for every Crowdlock; only the
  * minimum's size is each Crowdlock's own (minimum_counted_lock_sats).
  */
-export const COUNTING_RULE_URL = "https://github.com/Jimbus9/fanfund/blob/main/spec/counting-rule.md#the-minimum";
 
 /**
  * Pounds per bitcoin right now, for an indicative figure only — never a
@@ -275,7 +272,7 @@ export function repoFromFileUrl(fileUrl) {
 
 /**
  * What a Crowdlock's published inbox version means, given the app's.
- *   "source"   The Kop Fund's own repository, where this code is written — never offered an update
+ *   "source"   The Crowdlock method's reference repository, where this code is written — never offered an update
  *   "current"  up to date
  *   "behind"   an update is available
  *   "unknown"  not made by the app

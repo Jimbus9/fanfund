@@ -4,8 +4,8 @@
 # no secrets: only the permission GitHub gives every repository's own jobs to
 # write to that repository. Each run keeps going for about fifty minutes and
 # then starts the next; the hourly schedule only restarts it if that chain
-# ever breaks. Set up by the Crowdlock app; the code is the same as The Kop
-# Fund's and is published at github.com/Jimbus9/fanfund.
+# ever breaks. Set up by the Crowdlock app; the code is the Crowdlock method's
+# reference copy, published at github.com/Jimbus9/fanfund.
 
 name: Relay inbox
 

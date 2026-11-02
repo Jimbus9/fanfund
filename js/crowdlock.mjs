@@ -3,8 +3,8 @@
 // Every Crowdlock publishes its parameters in one file, crowdlocks/<name>.json.
 // Nothing about any particular Crowdlock — its declaration, its co-signer, its
 // minimums — is written into the code. The code reads the file it is pointed
-// at, so the same register page and the same lock tools serve The Kop Fund and
-// anybody else's Crowdlock alike.
+// at, so the same register page and the same lock tools serve every Crowdlock
+// alike, including The Kop Fund's.
 //
 // Everything here is a pure check: no network, no keys, no signing. It runs
 // unchanged in a browser and in Node.

@@ -15,7 +15,8 @@ import { hrpFor } from "../js/lockrecord.mjs";
 import { postRecord } from "./nostr.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const name = process.argv[2] ?? "kop-fund-testnet4";
+const name = process.argv[2];
+if (!name) { console.log("Name the Crowdlock to test, for example: node selftest.mjs kop-fund-testnet4"); process.exit(1); }
 const crowdlock = JSON.parse(readFileSync(join(ROOT, "crowdlocks", `${name}.json`), "utf8"));
 if (crowdlock.network === "mainnet") { console.log("Refusing: the self-test only posts to test Crowdlocks."); process.exit(1); }
 if (!Array.isArray(crowdlock.relays)) { console.log(`${name} names no relays.`); process.exit(1); }

@@ -45,6 +45,9 @@ export function pubkeyFromWords(words) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const line = (s = "") => console.log(s);
+  // The label printed on the paper: name the Crowdlock the key is for, e.g.
+  // node generate.mjs "The Kop Fund". Written by hand on the paper, so it must be true.
+  const label = process.argv[2] ? `${process.argv[2]} co-signer key` : "Co-signer key: write the Crowdlock's name here";
   const rule = () => line("=".repeat(74));
 
   // 256 bits from the operating system's own source, which is what every
@@ -71,7 +74,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   line("  Label them, or they are useless to whoever finds them in five");
   line("  years, including you:");
   line();
-  line("      The Kop Fund co-signer key");
+  line(`      ${label}`);
   line(`      ${new Date().toISOString().slice(0, 10)}   path ${PATH}`);
   line();
   line("  These words are not saved anywhere. Close this and they are gone.");

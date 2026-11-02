@@ -1014,8 +1014,8 @@ function LookAfter({ c }: { c: Extract<Loaded, { ok: true }> }) {
     })();
   }, [c.url]);
 
-  // Not on GitHub Pages: nothing here can help. The Kop Fund's own repository
-  // ("source") is where this code is written, so it is never offered an
+  // Not on GitHub Pages: nothing here can help. The Crowdlock method's reference
+  // repository ("source") is where this code is written, so it is never offered an
   // update — but its maintainers can still be added here.
   if (!where) return null;
 

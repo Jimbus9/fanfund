@@ -2,6 +2,6 @@
   "name": "fanfund",
   "private": true,
   "type": "module",
-  "description": "The Kop Fund \u2014 declaration, register and lock",
+  "description": "The Crowdlock method, and The Kop Fund's instance of it: declaration, register and lock",
   "license": "MIT"
 }

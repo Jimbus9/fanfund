@@ -1,6 +1,6 @@
 # Stage 1 — prove the lock
 
-Everything in The Kop Fund rests on one sentence:
+Everything in a Crowdlock rests on one sentence:
 
 > Your money comes home on its date, and nobody can take it in the meantime.
 

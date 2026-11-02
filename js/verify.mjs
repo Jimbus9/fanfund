@@ -1,7 +1,7 @@
 // Verifying a membership signature.
 //
-// This is the only piece of cryptography The Kop Fund asks anyone to trust,
-// and it runs in your own browser rather than on our server. Given an address
+// This is the only piece of cryptography a Crowdlock asks anyone to trust,
+// and it runs in your own browser rather than on anyone's server. Given an address
 // and a signature, it answers one question: did the holder of that address
 // sign this exact declaration?
 //

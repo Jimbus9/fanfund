@@ -1,4 +1,4 @@
-// The Kop Fund lock.
+// A Crowdlock lock.
 //
 // A locked coin can leave in exactly two directions and no others:
 //

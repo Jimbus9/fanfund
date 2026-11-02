@@ -61,7 +61,7 @@ committed = Σ (confirmed balance of every lock address in state "locked"
 ## The minimum
 
 **Each Crowdlock sets its own minimum**, in its published file
-(`minimum_counted_lock_sats`). The Kop Fund's is **200,000 satoshis**
+(`minimum_counted_lock_sats`). For example, The Kop Fund's is **200,000 satoshis**
 (0.002 BTC). A lock below its Crowdlock's minimum does not count towards the
 committed total.
 
@@ -70,7 +70,7 @@ still published; it is only left out of the total.
 
 Expressed in satoshis rather than pounds so it does not drift with the price.
 Its only purpose is to stop a large number of worthless locks inflating the
-figures — at The Kop Fund's level, faking ten thousand of them would cost real
+figures — at a level like The Kop Fund's, faking ten thousand of them would cost real
 money. A Crowdlock choosing its own should pick a figure with the same effect
 for the size of crowd it expects.
 
