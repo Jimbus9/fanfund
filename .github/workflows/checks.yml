@@ -1,0 +1,57 @@
+# Every test suite in the repository, on every push. Two sessions work on this
+# repository; this is how a change in one that breaks something the other
+# depends on — the app's copy of the inbox code, the shared checking code, a
+# Crowdlock file — shows up as a red cross on the commit that caused it,
+# instead of on the next app build or on a fan's phone.
+#
+# The relay inbox's own frequent commits (registers, relay health,
+# announcements) change only data, so they don't trigger it.
+
+name: Checks
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "registrations.json"
+      - "crowdlocks/test/registrations.json"
+      - "relay/health.json"
+      - "relay/announced.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: The site's shared code, pages and live registers
+        run: for t in js/*.test.mjs; do echo "== $t"; node "$t" || exit 1; done
+
+      - name: The lock
+        working-directory: lock
+        run: npm ci --no-audit --no-fund && node selftest.mjs && node taproot.test.mjs && node commitment.test.mjs
+
+      - name: The co-signer key script
+        working-directory: cosigner
+        run: npm ci --no-audit --no-fund && node cosigner.test.mjs
+
+      - name: The relay inbox
+        working-directory: relay
+        run: npm ci --no-audit --no-fund && node inbox.test.mjs
+
+      - name: The app — key module on a private chain, loader, starting a Crowdlock, template up to date
+        run: |
+          (cd app && npm ci --no-audit --no-fund)
+          cd app/test-chain && npm ci --ignore-scripts --no-audit --no-fund && npm test
+
+      - name: The app — type check
+        working-directory: app
+        run: npx tsc --noEmit -p .
