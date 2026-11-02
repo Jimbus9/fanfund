@@ -185,6 +185,20 @@ try { await fc.utxos("tb1qa"); } catch {}
 await fc.utxos("tb1qa");
 check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
 
+// Every co-signer key this repository publishes must be a real point on the
+// curve: one that only looks right would make every lock naming it impossible
+// to spend by the purchase route, and nothing would say so until it was tried.
+{
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { isPublicKey } = await import("../src/wallet/core.mjs");
+  const dir = new URL("../../crowdlocks/", import.meta.url);
+  const bad = [];
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json") && x !== "index.json")) {
+    for (const k of JSON.parse(readFileSync(new URL(f, dir), "utf8")).cosigner_keys ?? []) if (!isPublicKey(k)) bad.push(`${f}: ${k.slice(0, 12)}…`);
+  }
+  check("Every co-signer key this repository publishes is a real public key", bad.length === 0, bad.join(", "));
+}
+
 // Sharing
 const kopUrl = `${SITE}crowdlocks/kop-fund.json`;
 const app = openLinkFor(kopUrl);

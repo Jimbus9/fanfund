@@ -19,6 +19,7 @@
 
 import { canonicalise, declarationHash, membershipStatement, checkCrowdlock, checkRegisterFiles, checkSeparate } from "../../method/js/crowdlock.mjs";
 import template from "./template.mjs";
+import { isPublicKey } from "./wallet/core.mjs";
 
 /** The one line every declaration started in the app must keep, word for word. */
 export const NO_RETURNS =
@@ -50,6 +51,18 @@ export function declarationSkeleton(title = "OUR DECLARATION") {
 }
 
 /** A repository-safe short name from the Crowdlock's name. */
+/**
+ * The checks a Crowdlock file must pass after a co-signer key is added in the
+ * app: the same checks as any Crowdlock file, plus every key a real point on
+ * the curve, which a pattern alone can't tell.
+ */
+export function checkWithNewKey(c) {
+  const r = checkCrowdlock(c);
+  const problems = [...r.problems];
+  (c.cosigner_keys ?? []).forEach((k, i) => { if (!isPublicKey(k)) problems.push(`cosigner_keys[${i}] is not a real public key`); });
+  return { ok: problems.length === 0, problems };
+}
+
 export function slugify(name) {
   return String(name ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, "") || "crowdlock";
@@ -157,9 +170,9 @@ export function buildCrowdlock({ name, about, title, declarationText, network, m
   need(/^https:\/\/[^\s]+\/$/.test(siteBase ?? ""), "internal: the site address is missing");
   if (network === "mainnet") {
     need(Number.isInteger(minimumSats) && minimumSats >= 10000, "Set a minimum of at least 0.0001 BTC.");
-    need(/^0[23][0-9a-f]{64}$/.test(cosignerPubkey ?? ""), "Paste the co-signer's public key: 66 characters, starting 02 or 03.");
+    need(isPublicKey(cosignerPubkey), "Paste the co-signer's public key: 66 characters, starting 02 or 03, copied whole.");
   }
-  need(/^0[23][0-9a-f]{64}$/.test(testCosignerPubkey ?? ""), "internal: the test co-signer key is missing");
+  need(isPublicKey(testCosignerPubkey), "The test copy's co-signer key isn't a public key: 66 characters, starting 02 or 03, copied whole.");
   if (problems.length) return { ok: false, problems };
 
   const slug = slugify(name);

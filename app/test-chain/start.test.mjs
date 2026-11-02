@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { buildCrowdlock, declarationSkeleton, NO_RETURNS, slugify } from "../src/start.mjs";
-import { startSignIn, waitForSignIn, createCrowdlockRepo, CLIENT_ID, SCOPES, canWrite, updateCrowdlockRepo, addMaintainer } from "../src/github.mjs";
+import { startSignIn, waitForSignIn, createCrowdlockRepo, CLIENT_ID, SCOPES, canWrite, updateCrowdlockRepo, addMaintainer, addCosignerKey } from "../src/github.mjs";
 import { repoFromFileUrl, versionStatus, changesSince } from "../src/crowdlocks.mjs";
 import template from "../src/template.mjs";
 import { loadCrowdlock } from "../src/crowdlocks.mjs";
@@ -29,7 +29,7 @@ rule("WHAT A FOUNDER TYPES");
 const site = "https://somefan.github.io/the-pub-fund/";
 const base = {
   name: "The Pub Fund", about: "Regulars buying the Red Lion so it stays a pub for good.", title: "THE RED LION DECLARATION",
-  network: "mainnet", minimumSats: 100000, cosignerPubkey: "02" + "ab".repeat(32), testCosignerPubkey: co.publicKey,
+  network: "mainnet", minimumSats: 100000, cosignerPubkey: "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c", testCosignerPubkey: co.publicKey,
   siteBase: site, today: "2026-11-01",
 };
 const filled = declarationSkeleton("THE RED LION DECLARATION").replace(/\[Write it here[^\]]*\]/, "We are buying the Red Lion so that it stays a pub, owned by nobody who can sell it.");
@@ -165,6 +165,31 @@ let badName = ""; try { await addMaintainer({ token: "t", owner: "somefan", repo
 check("A username that doesn't exist is caught, in plain words", badName.includes("no GitHub account called nobody-here"));
 let junk = ""; try { await addMaintainer({ token: "t", owner: "x", repo: "y", username: "jane smith!" }, fakeRepo({})); } catch (e) { junk = e.message; }
 check("Something that isn't a username is caught before asking GitHub", junk.includes("isn't a GitHub username"));
+
+// Adding a co-signer key to a Crowdlock that already exists.
+const { checkWithNewKey } = await import("../src/start.mjs");
+const { newestCosigner, pathInRepo } = await import("../src/crowdlocks.mjs");
+const { isPublicKey } = await import("../src/wallet/core.mjs");
+const realPath = `crowdlocks/${real.slug}.json`;
+const realFile = files[realPath];
+const oldKey = JSON.parse(realFile).cosigner_keys[0];
+const newKey = co.publicKey;
+const withContents = (perms) => { const inner = fakeRepo(perms); return async (url, init = {}) => {
+  const u = String(url).replace("https://api.github.com", "");
+  if (u === `/repos/somefan/the-pub-fund/contents/${realPath}`) return Response.json({ content: Buffer.from(realFile).toString("base64").replace(/(.{60})/g, "$1\n") });
+  return inner(url, init);
+}; };
+const addedKey = await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: newKey.toUpperCase(), check: checkWithNewKey }, withContents({ push: true }));
+check("A co-signer key is added alongside the one already there, never replacing it",
+  addedKey.keys.length === 2 && addedKey.keys[0] === oldKey && addedKey.keys[1] === newKey && gcalls.tree.length === 1 && gcalls.tree[0] === realPath);
+check("New locks use the newest key; the old one stays for locks already made", newestCosigner({ cosigner_keys: addedKey.keys }) === newKey && newestCosigner({ cosigner_keys: [] }) === undefined);
+let dupe = ""; try { await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: oldKey, check: checkWithNewKey }, withContents({ push: true })); } catch (e) { dupe = e.message; }
+check("The same key twice is refused", dupe.includes("already has that"));
+const offCurve = "02" + "00".repeat(31) + "05";
+let bad = ""; try { await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: offCurve, check: checkWithNewKey }, withContents({ push: true })); } catch (e) { bad = e.message; }
+check("A key that only looks right — not a real point on the curve — is refused", !isPublicKey(offCurve) && isPublicKey(newKey) && bad.includes("not a real public key"), bad);
+check("A Crowdlock's file is found inside its repository from its link",
+  pathInRepo("https://somefan.github.io/the-pub-fund/crowdlocks/the-pub-fund.json") === "crowdlocks/the-pub-fund.json" && pathInRepo("https://example.com/x.json") === null);
 
 rule();
 console.log(failures === 0 ? "Starting a Crowdlock builds one that passes every check, and sets it up in the founder's own account." : `${failures} check(s) failed.`);

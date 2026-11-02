@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 // Setting up a founder's Crowdlock in their own GitHub account. Network code
 // only: no bitcoin key passes through here.
 //
@@ -196,5 +197,28 @@ export async function addMaintainer({ token, owner, repo, username }, fetchImpl 
 // Signed in for this session only: kept in memory, never saved, and GitHub
 // ends it by itself within hours. Saves a founder typing a code twice in a row.
 let session = null;
+/**
+ * Add a co-signer key to a Crowdlock that already exists, alongside the keys it
+ * has. Never removes one: a lock names its co-signer inside its address, so
+ * removing a key would stop every lock naming it from being counted. Reads the
+ * file from the repository itself (not the website, which can lag), adds the
+ * key at the end — the newest key is the one new locks use — and commits.
+ * `check(file)` is run on the result and must return { ok, problems }.
+ */
+export async function addCosignerKey({ token, owner, repo, path, key, check }, fetchImpl = globalThis.fetch) {
+  const gh = client(token, fetchImpl);
+  const got = await gh("GET", `/repos/${owner}/${repo}/contents/${path}`);
+  const c = JSON.parse(Buffer.from(String(got.content).replace(/\s/g, ""), "base64").toString("utf8"));
+  const k = String(key).trim().toLowerCase();
+  const keys = Array.isArray(c.cosigner_keys) ? c.cosigner_keys : [];
+  if (keys.some((x) => x.slice(2) === k.slice(2))) throw new Error("This Crowdlock already has that co-signer key.");
+  const next = { ...c, cosigner_keys: [...keys, k] };
+  const r = check ? check(next) : { ok: true };
+  if (!r.ok) throw new Error(`That would break the Crowdlock file: ${r.problems.join("; ")}`);
+  const sha = await commitFiles(gh, owner, repo, { [path]: JSON.stringify(next, null, 2) + "\n" },
+    `Add a co-signer key to ${c.name ?? path}\n\nAdded from the Crowdlock app by its founder or a maintainer. The key is added alongside the ${keys.length} already there, none removed, so every existing lock still counts. New locks use this key.`);
+  return { sha, keys: next.cosigner_keys };
+}
+
 export function rememberSignIn(token) { session = { token, until: Date.now() + 60 * 60 * 1000 }; }
 export function currentSignIn() { return session && session.until > Date.now() ? session.token : null; }

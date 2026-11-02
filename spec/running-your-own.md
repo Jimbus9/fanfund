@@ -172,17 +172,24 @@ transactions in the published format.
 go on without one, then writes it into your Crowdlock file in your own GitHub
 account. Nothing else to do.
 
-**Changing it on a Crowdlock that already exists** is a hand edit, because it
-is rare and because getting it wrong is expensive. The key lives in one place:
+**Adding one to a Crowdlock that already exists:** in the app, open the
+Crowdlock, then "Look after this Crowdlock" → "For its founder and
+maintainers" → paste the public key under "Co-signer keys" → "Add this
+co-signer key". It signs you in to GitHub, refuses a key that is not a real
+public key, is your own wallet's, or is already there, and adds it alongside
+the others in one commit. It never removes one.
+
+**By hand**, the key lives in one place:
 
 ```json
 "cosigner_keys": ["03811ead…baf68b"]
 ```
 
-On GitHub, open `crowdlocks/<your-name>.json`, press the pencil, change that
-line, and commit. The checks that run on every push will refuse a key that is
-not 66 characters starting `02` or `03`, that is not a real point on the
-curve, or that another Crowdlock already uses.
+On GitHub, open `crowdlocks/<your-name>.json`, press the pencil, add the new
+key at the end of that list, and commit. The checks that run on every push will
+refuse a key that is not 66 characters starting `02` or `03`, or that another
+Crowdlock already uses; in this repository they also refuse one that is not a
+real point on the curve.
 
 **Before you change one, read this.** A lock names its co-signer key inside
 the script that makes its address, and that script is frozen the moment the
@@ -194,7 +201,7 @@ address exists. So:
   co-signer it names. If your Crowdlock has locks, **add the new key alongside
   the old one** rather than replacing it. `cosigner_keys` is a list for exactly
   this reason.
-- **New locks use whichever key your app or page offers**, so the old key stays
+- **New locks use the newest key — the last in the list**, so the old key stays
   in service only for the locks already made. It can come out of the list once
   the last of them has lapsed.
 - **Plan the change for a renewal.** Members re-lock when a lock reaches its

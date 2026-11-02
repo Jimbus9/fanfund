@@ -265,6 +265,21 @@ export function matchesSearch(item, query) {
  * The GitHub repository behind a Crowdlock published on GitHub Pages, from
  * its file's link — or null if it isn't hosted that way.
  */
+/**
+ * The co-signer key new locks name: the newest in the list. Older keys stay
+ * listed so the locks already naming them keep counting.
+ */
+export function newestCosigner(crowdlock) {
+  const keys = crowdlock?.cosigner_keys ?? [];
+  return keys.length ? keys[keys.length - 1] : undefined;
+}
+
+/** Where a Crowdlock's file sits inside its repository, from its link. */
+export function pathInRepo(fileUrl) {
+  const m = /^https:\/\/[a-z0-9-]+\.github\.io\/[A-Za-z0-9._-]+\/(.+)$/i.exec(String(fileUrl ?? ""));
+  return m ? decodeURIComponent(m[1].split(/[?#]/)[0]) : null;
+}
+
 export function repoFromFileUrl(fileUrl) {
   const m = /^https:\/\/([a-z0-9-]+)\.github\.io\/([A-Za-z0-9._-]+)\//i.exec(String(fileUrl ?? ""));
   return m ? { owner: m[1], repo: m[2] } : null;

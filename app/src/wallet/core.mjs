@@ -506,3 +506,13 @@ function toHex(bytes) {
   for (const b of bytes) s += b.toString(16).padStart(2, "0");
   return s;
 }
+
+/**
+ * Is this a public key a lock can be built with: 66 hex characters starting 02
+ * or 03, and a real point on the curve? A key that only looks right would make
+ * every lock built from it unspendable by the purchase route, silently.
+ */
+export function isPublicKey(hex) {
+  const h = String(hex ?? "").trim().toLowerCase();
+  return /^0[23][0-9a-f]{64}$/.test(h) && ecc.isPoint(Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16)));
+}

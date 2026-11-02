@@ -27,12 +27,13 @@ import QRCode from "react-native-qrcode-svg";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, suggestWords, waitingBalance, buildSend, signStatement,
   lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords, newCosignerWords, cosignerKeyFromWords, COSIGNER_PATH,
+  isPublicKey,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain modules shared with the tests
-import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS } from "./src/start.mjs";
+import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS, checkWithNewKey } from "./src/start.mjs";
 // @ts-ignore
 import {
-  startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo, canWrite, updateCrowdlockRepo, addMaintainer, rememberSignIn, currentSignIn,
+  startSignIn, waitForSignIn, whoAmI, createCrowdlockRepo, canWrite, updateCrowdlockRepo, addMaintainer, rememberSignIn, currentSignIn, addCosignerKey,
 } from "./src/github.mjs";
 // @ts-ignore
 import template from "./src/template.mjs";
@@ -42,7 +43,7 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
-  locksOnRegister, submitLock, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
+  locksOnRegister, submitLock, newestCosigner, pathInRepo, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
   repoFromFileUrl, versionStatus, changesSince, baseFor,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
@@ -512,7 +513,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
 
       {me && c.crowdlock.network === NETWORK && <MyLocks account={account} c={c} onChange={load} />}
 
-      <LookAfter c={c} />
+      <LookAfter c={c} account={account} onChange={load} />
 
       <Text style={s.h2}>Share it</Text>
       <Text style={s.p}>Anyone with the app can point their phone's camera at this code to open it.</Text>
@@ -538,7 +539,8 @@ type LockTerms = { address: string; locktime: number; cosignerPubkey: string };
 type LockRow = LockTerms & { state: string; confirmed: bigint; arriving: bigint; onRegister: boolean; note?: string };
 
 function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { ok: true }>; onChange: () => void }) {
-  const cosigner: string | undefined = (c.crowdlock.cosigner_keys ?? [])[0];
+  // New locks name the newest key; older ones stay listed for the locks that name them.
+  const cosigner: string | undefined = newestCosigner(c.crowdlock);
   const minimum = BigInt(c.crowdlock.minimum_counted_lock_sats);
   const lengths: number[] = c.crowdlock.lock_lengths_years;
   const [waiting, setWaiting] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
@@ -605,7 +607,7 @@ function MyLocks({ account, c, onChange }: { account: any; c: Extract<Loaded, { 
   if (!cosigner) return (
     <View>
       <Text style={s.h2}>Your locks</Text>
-      <Text style={s.p}>This Crowdlock hasn't published its co-signer key yet, so nothing can be locked for it yet. Your waiting money stays yours in the meantime.</Text>
+      <Text style={s.p}>This Crowdlock hasn't published its co-signer key yet, so nothing can be locked for it yet. Your waiting money stays yours in the meantime. (If it's yours, add one under "Look after this Crowdlock" below.)</Text>
     </View>
   );
 
@@ -993,7 +995,55 @@ function MaintainerForm({ owner, repo }: { owner: string; repo: string }) {
   </>;
 }
 
-function LookAfter({ c }: { c: Extract<Loaded, { ok: true }> }) {
+// Adding a co-signer key to a Crowdlock that already exists. Only ever adds:
+// a lock names its co-signer inside its address, so removing a key would stop
+// every lock naming it from being counted. The newest key is the one new locks
+// use; the older ones retire on their own once the locks naming them lapse.
+function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded, { ok: true }>; account: any; owner: string; repo: string; onChange: () => void }) {
+  const { withSignIn, codeView } = useGitHub();
+  const keys: string[] = c.crowdlock.cosigner_keys ?? [];
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const k = key.trim().toLowerCase();
+  const problem = !k ? null
+    : !isPublicKey(k) ? "That isn't a public key: it should be 66 characters starting 02 or 03, copied whole."
+    : k.slice(2) === String(account.publicKey).slice(2) ? "That's your own wallet's key. A co-signer must be a separate key, or the person who locks could also approve the purchase alone."
+    : keys.some((x) => x.slice(2) === k.slice(2)) ? "This Crowdlock already has that key."
+    : null;
+  const path = pathInRepo(c.url);
+  const add = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await withSignIn(async (token) => {
+        if (!(await canWrite(token, owner, repo))) throw new Error("Only this Crowdlock's founder and its maintainers can change it, and the GitHub account you signed in with isn't one of them.");
+        await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
+        setKey("");
+        setMsg({ ok: true, text: "Added. Its website updates in a minute or two — then tap Refresh and new locks will use it." });
+        setTimeout(onChange, 90000);
+      });
+    } catch (e: any) { setMsg({ ok: false, text: String(e.message ?? e) }); }
+    setBusy(false);
+  };
+  return <>
+    <Text style={s.label}>Co-signer keys</Text>
+    {keys.length === 0 ? <Text style={s.note}>None yet, so nobody can lock for it. Add one below.</Text>
+      : keys.map((x, i) => (
+        <View key={x} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={[s.note, { flex: 1 }]}>{x.slice(0, 10)}…{x.slice(-8)}{i === keys.length - 1 ? "  · new locks use this one" : "  · kept for locks already made"}</Text>
+          <Button label="Copy" kind="plain" onPress={() => Clipboard.setStringAsync(x)} />
+        </View>))}
+    <Text style={s.note}>Adding a key never removes one, so every lock already made keeps counting. Don't have one? Make it from Home → "Make a co-signer key", ideally on a phone that holds no money{c.crowdlock.network === "mainnet" ? ", and keep its words on paper only" : ""}.</Text>
+    <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={key} onChangeText={(t) => { setKey(t); setMsg(null); }} placeholder="Paste a public key: 02… or 03…" />
+    {problem && <Text style={s.error}>{problem}</Text>}
+    {!path && <Text style={s.error}>Can't tell where this Crowdlock's file sits in its repository.</Text>}
+    {codeView}
+    {msg && <Text style={msg.ok ? s.good : s.error}>{msg.text}</Text>}
+    <Button label={busy ? "Adding…" : "Add this co-signer key"} disabled={busy || !k || !!problem || !path} onPress={add} />
+  </>;
+}
+
+function LookAfter({ c, account, onChange }: { c: Extract<Loaded, { ok: true }>; account: any; onChange: () => void }) {
   const where = repoFromFileUrl(c.url);
   const [status, setStatus] = useState<string>("unknown");
   const [published, setPublished] = useState<string | null>(null);
@@ -1057,6 +1107,7 @@ function LookAfter({ c }: { c: Extract<Loaded, { ok: true }> }) {
         {status === "current" && <Text style={s.good}>Its inbox is up to date.</Text>}
         {codeView}
         {msg && <Text style={msg.ok ? s.good : s.error}>{msg.text}</Text>}
+        <CosignerKeys c={c} account={account} owner={where.owner} repo={where.repo} onChange={onChange} />
         <Text style={s.label}>Maintainers</Text>
         <MaintainerAdvice />
         <MaintainerForm owner={where.owner} repo={where.repo} />
@@ -1142,6 +1193,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
   const [text, setText] = useState(declarationSkeleton("OUR DECLARATION"));
   const [minimum, setMinimum] = useState("0.002");
   const [cosigner, setCosigner] = useState("");
+  const [testPasted, setTestPasted] = useState("");
   const [problems, setProblems] = useState<string[] | null>(null);
   const [checked, setChecked] = useState<any>(null);
   const [stage, setStage] = useState<"form" | "signin" | "creating" | "done">("form");
@@ -1160,7 +1212,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
     const minimumSats = /^\d*\.?\d{0,8}$/.test(t) && t !== "" ? Number(BigInt(w || "0") * 100000000n + BigInt((f + "00000000").slice(0, 8))) : NaN;
     return {
       name, about, title, declarationText: text, network, minimumSats,
-      cosignerPubkey: cosigner.trim().toLowerCase(), testCosignerPubkey: testCo,
+      cosignerPubkey: cosigner.trim().toLowerCase(), testCosignerPubkey: testPasted.trim().toLowerCase() || testCo,
       siteBase, today: new Date().toISOString().slice(0, 10),
     };
   };
@@ -1277,8 +1329,15 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
         <TextInput style={s.input} keyboardType="decimal-pad" value={minimum} onChangeText={(t) => { setMinimum(t); setChecked(null); }} />
         <Text style={s.label}>Co-signer's public key</Text>
         <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={cosigner} onChangeText={(t) => { setCosigner(t); setChecked(null); }} placeholder="02… or 03…, 66 characters" />
-        <Text style={s.note}>The co-signer can't take or keep anyone's money — only refuse to complete a purchase. For real bitcoin, make this key somewhere safe and paste its public half here. The test copy gets a key made on this phone.</Text>
-      </> : <Text style={s.note}>Test bitcoin has no value: practise everything — joining, locking, taking a lock home — before anything is real. Its co-signer key is made on this phone from your backup words.</Text>}
+        <Text style={s.note}>The co-signer can't take or keep anyone's money — only refuse to complete a purchase. Make this key with "Make a co-signer key" on Home (or Sparrow, Electrum, or the method's own script), keep its words on paper, and paste its public key here.</Text>
+        {!!cosigner.trim() && !isPublicKey(cosigner) && <Text style={s.error}>That isn't a public key: 66 characters starting 02 or 03, copied whole.</Text>}
+      </> : <Text style={s.note}>Test bitcoin has no value: practise everything — joining, locking, taking a lock home — before anything is real.</Text>}
+
+      <Text style={s.label}>{network === "mainnet" ? "The test copy's co-signer key" : "Co-signer key"}</Text>
+      <Text style={s.note}>{testPasted.trim() ? "Using the key you pasted." : `Made on this phone from your backup words: ${testCo.slice(0, 10)}…${testCo.slice(-8)}. Or paste a practice key you made instead:`}</Text>
+      <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={testPasted} onChangeText={(t) => { setTestPasted(t); setChecked(null); }} placeholder="Optional: 02… or 03…" />
+      {!!testPasted.trim() && !isPublicKey(testPasted) && <Text style={s.error}>That isn't a public key: 66 characters starting 02 or 03, copied whole.</Text>}
+      <Text style={s.note}>You can add more co-signer keys later, under "Look after this Crowdlock".</Text>
 
       {problems && problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}
       {error && <Text style={s.error}>{error}</Text>}
