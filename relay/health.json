@@ -1,45 +1,45 @@
 {
   "kop-fund-testnet4.json": {
     "wss://relay.damus.io": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://nos.lol": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://relay.primal.net": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://nostr.mom": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://offchain.pub": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     }
   },
   "kop-fund.json": {
     "wss://relay.damus.io": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://nos.lol": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://relay.primal.net": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://nostr.mom": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     },
     "wss://offchain.pub": {
-      "lastAnswered": "2026-11-01",
+      "lastAnswered": "2026-11-02",
       "silentSince": null
     }
   }
