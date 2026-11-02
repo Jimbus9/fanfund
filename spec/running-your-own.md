@@ -166,6 +166,48 @@ lock still goes home on its date. Signing, when a proposal is funded, can be
 done the same three ways, because commitments are standard partially signed
 transactions in the published format.
 
+## Putting the key in, and changing it later
+
+**Starting a Crowdlock in the app:** it asks for the public key and will not
+go on without one, then writes it into your Crowdlock file in your own GitHub
+account. Nothing else to do.
+
+**Changing it on a Crowdlock that already exists** is a hand edit, because it
+is rare and because getting it wrong is expensive. The key lives in one place:
+
+```json
+"cosigner_keys": ["03811ead…baf68b"]
+```
+
+On GitHub, open `crowdlocks/<your-name>.json`, press the pencil, change that
+line, and commit. The checks that run on every push will refuse a key that is
+not 66 characters starting `02` or `03`, that is not a real point on the
+curve, or that another Crowdlock already uses.
+
+**Before you change one, read this.** A lock names its co-signer key inside
+the script that makes its address, and that script is frozen the moment the
+address exists. So:
+
+- **Removing a key orphans every lock that names it.** Those locks still work
+  — the coins are safe and still come home on their dates — but the register
+  will no longer count them, because a lock is counted by the Crowdlock whose
+  co-signer it names. If your Crowdlock has locks, **add the new key alongside
+  the old one** rather than replacing it. `cosigner_keys` is a list for exactly
+  this reason.
+- **New locks use whichever key your app or page offers**, so the old key stays
+  in service only for the locks already made. It can come out of the list once
+  the last of them has lapsed.
+- **Plan the change for a renewal.** Members re-lock when a lock reaches its
+  date anyway, so a key change costs nobody an extra transaction if it rides
+  along with that. Twenty early members can be asked directly; twenty thousand
+  cannot, which is the real reason to settle the shape of your co-signer
+  before you are large rather than after.
+
+**Losing the words is not the same as changing the key.** A lost co-signer key
+cannot be replaced for locks that already name it: no purchase those locks
+were meant to fund can ever complete, though every one of them still goes home
+on its date. That is the whole case for the paper, twice, in two places.
+
 ## Several Crowdlocks side by side
 
 One site, or one app, can carry as many Crowdlocks as people add. Add your file
