@@ -83,8 +83,9 @@ for (const file of readdirSync(join(ROOT, "crowdlocks")).filter((f) => f.endsWit
   const swap = planSwaps(crowdlock, health, today);
   allHealth[file] = swap.health;
   for (const w of swap.swaps) {
-    console.log(`${file}: ${w.out} silent since ${w.silentSince} — replaced with ${w.in}`);
-    messages.push(`Relay ${w.out.replace("wss://", "")} silent since ${w.silentSince}, replaced with ${w.in.replace("wss://", "")}`);
+    const when = w.lastAnswered ? `last answered ${w.lastAnswered}` : "never answered";
+    console.log(`${file}: ${w.out} ${when}, ${w.days} days — replaced with ${w.in}`);
+    messages.push(`Relay ${w.out.replace("wss://", "")} ${when} (${w.days} days), replaced with ${w.in.replace("wss://", "")}`);
   }
   for (const r of swap.stuck) console.log(`${file}: WARNING ${r} silent for ${SILENT_DAYS}+ days and no spare relay is left to replace it`);
   if (swap.swaps.length) writeFileSync(join(ROOT, "crowdlocks", file), JSON.stringify(swap.crowdlock, null, 2) + "\n");

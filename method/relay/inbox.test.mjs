@@ -94,28 +94,97 @@ r = await applyRecords(register, [events[0], post(lockRec)], { crowdlock, statem
 check("If the chain can't be read, the lock waits for the next run", !r.outcome.find((o) => o.type === "lock").added);
 
 // ---- Relay health ----
+//
+// Rewritten 2 November after the old record flapped. It tracked a
+// "silentSince" that was set on the first failed pass and cleared on the next
+// good one, so an intermittent relay flipped it several times an hour — 117
+// of the repository's first 223 commits were that one field — and because any
+// good pass reset the clock, seven CONSECUTIVE silent days was nearly
+// unreachable. Both of those now have a test.
+
 const A = "wss://a.example", B = "wss://b.example", S1 = "wss://spare1.example", S2 = "wss://spare2.example";
-let h = recordPass({}, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-01");
-check("Health records the day each relay last answered", h[A].lastAnswered === "2026-11-01" && h[B].silentSince === null);
+const pass = (h, aOk, bOk, day) => recordPass(h, [{ relay: A, ok: aOk }, { relay: B, ok: bOk }], day);
+
+let h = pass({}, true, true, "2026-11-01");
+check("Health records the day each relay last answered",
+  h[A].lastAnswered === "2026-11-01" && h[B].lastAnswered === "2026-11-01");
+check("…and nothing else that moves", !("silentSince" in h[A]), Object.keys(h[A]).join(", "));
 check("The same day again changes nothing, so there is nothing to commit",
-  recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-01") === h);
+  pass(h, true, true, "2026-11-01") === h);
 check("A pass where no relay answers says nothing about the relays",
-  recordPass(h, [{ relay: A, ok: false }, { relay: B, ok: false }], "2026-11-02") === h);
-h = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: false }], "2026-11-02");
-check("A relay that stops answering is marked silent from that day", h[B].silentSince === "2026-11-02" && h[B].lastAnswered === "2026-11-01");
-h = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: false }], "2026-11-05");
-check("…and stays silent from its first silent day", h[B].silentSince === "2026-11-02");
+  pass(h, false, false, "2026-11-02") === h);
+
+h = pass(h, true, false, "2026-11-02");
+check("A relay that stops answering keeps the day it last answered",
+  h[B].lastAnswered === "2026-11-01" && h[A].lastAnswered === "2026-11-02");
+
+// THE FLAPPING. A relay that fails and answers within one day used to rewrite
+// the record both times. Now the second pass of the day is a no-op for it.
+const answered = pass(h, true, true, "2026-11-02");
+const flapped = pass(answered, true, false, "2026-11-02");
+check("A relay failing and answering on the same day commits once, not twice",
+  flapped === answered, "the second pass of the day changes nothing");
+
 const cl = { ...crowdlock, relays: [A, B], spare_relays: [S1, S2] };
-check("Six days silent: not swapped yet", planSwaps(cl, h, "2026-11-08").swaps.length === 0);
-const sw = planSwaps(cl, h, "2026-11-09");
-check("Seven days silent: swapped for the first spare, in its place",
-  sw.swaps.length === 1 && sw.crowdlock.relays[1] === S1 && sw.crowdlock.spare_relays.length === 1 && sw.crowdlock.spare_relays[0] === S2);
-check("…and the swapped Crowdlock file still checks out", checkCrowdlock(sw.crowdlock).problems.every((p) => !/relay/.test(p)));
-const back = recordPass(h, [{ relay: A, ok: true }, { relay: B, ok: true }], "2026-11-06");
-check("A relay that comes back before the seventh day is not swapped", back[B].silentSince === null && planSwaps(cl, back, "2026-11-20").swaps.length === 0);
-const noSpare = planSwaps({ ...cl, spare_relays: [] }, h, "2026-11-20");
+h = pass(h, true, false, "2026-11-05");
+check("Six days since it last answered: not swapped yet", planSwaps(cl, h, "2026-11-07").swaps.length === 0);
+const sw = planSwaps(cl, h, "2026-11-08");
+check("Seven days: swapped for the first spare, in its place",
+  sw.swaps.length === 1 && sw.crowdlock.relays[1] === S1
+  && sw.crowdlock.spare_relays.length === 1 && sw.crowdlock.spare_relays[0] === S2);
+check("…and the swap says when it last answered", sw.swaps[0].lastAnswered === "2026-11-01" && sw.swaps[0].days === 7);
+check("…and the swapped Crowdlock file still checks out",
+  checkCrowdlock(sw.crowdlock).problems.every((p) => !/relay/.test(p)));
+
+// THE CLOCK THAT NEVER RAN OUT. One good pass in ten used to reset the count
+// to zero, so this relay was never swapped however broken it was.
+let patchy = pass({}, true, true, "2026-11-01");
+for (let d = 2; d <= 20; d++) {
+  const day = `2026-11-${String(d).padStart(2, "0")}`;
+  patchy = pass(patchy, true, d % 10 === 0, day);   // B answers once in ten days
+}
+check("A relay answering once in ten days is NOT swapped, because it is working",
+  planSwaps(cl, patchy, "2026-11-20").swaps.length === 0, "it answered on the 20th");
+// …but once it stops entirely, the clock runs without being reset.
+let dying = patchy;
+for (let d = 21; d <= 27; d++) dying = pass(dying, true, false, `2026-11-${d}`);
+check("…and once it stops answering at all, seven days is reached and it goes",
+  planSwaps(cl, dying, "2026-11-27").swaps.length === 1, "no good pass to reset it");
+
+const back = pass(h, true, true, "2026-11-06");
+check("A relay that comes back before the seventh day is not swapped",
+  back[B].lastAnswered === "2026-11-06" && planSwaps(cl, back, "2026-11-11").swaps.length === 0);
+const noSpare = planSwaps({ ...cl, spare_relays: [] }, h, "2026-11-08");
 check("With no spare left it is reported, not removed", noSpare.swaps.length === 0 && noSpare.stuck[0] === B);
 check("A relay listed as both live and spare is refused", !checkCrowdlock({ ...cl, spare_relays: [A] }).ok);
+
+// If the inbox itself stops running for a week, every relay's record goes
+// stale at once. That must not swap the whole set out on the next pass — and
+// it does not, because planSwaps runs after recordPass, so a relay that
+// answers in that pass is already up to date before the swap is considered.
+let outage = pass({}, true, true, "2026-11-01");
+outage = pass(outage, true, true, "2026-11-21");   // nothing ran in between
+check("A fortnight with the inbox down swaps nothing once it answers again",
+  planSwaps(cl, outage, "2026-11-21").swaps.length === 0,
+  "both relays answered on the pass that matters");
+
+// A relay added to a Crowdlock that never answers once has no lastAnswered to
+// measure from, and used to sit there forever.
+let never = recordPass({}, [{ relay: A, ok: true }, { relay: B, ok: false }], "2026-11-01");
+check("A relay that has never answered is still watched from the day it appeared",
+  never[B].lastAnswered === null && never[B].since === "2026-11-01");
+for (let d = 2; d <= 8; d++) never = pass(never, true, false, `2026-11-0${d}`.slice(0, 10));
+check("…and is swapped after seven days like any other",
+  planSwaps(cl, never, "2026-11-08").swaps.length === 1);
+
+// Records written by the old module carry silentSince. They must not restart.
+const legacy = { [A]: { lastAnswered: "2026-10-25", silentSince: null },
+                 [B]: { lastAnswered: "2026-10-20", silentSince: "2026-10-21" } };
+const migrated = pass(legacy, true, false, "2026-11-02");
+check("An old record loses silentSince without losing its history",
+  !("silentSince" in migrated[B]) && migrated[B].lastAnswered === "2026-10-20");
+check("…so a long-silent relay is swapped at once rather than starting again",
+  planSwaps(cl, migrated, "2026-11-02").swaps.length === 1);
 
 // ---- Announcements ----
 const ann = finalizeEvent(announcementTemplate({ url: "https://somefan.github.io/pub/crowdlocks/pub.json", name: "The Pub Fund", about: "Buying the Red Lion.", network: "mainnet" }, now), generateSecretKey());
