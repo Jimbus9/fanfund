@@ -17,6 +17,14 @@ import { membershipStatement, checkCrowdlock } from "../js/crowdlock.mjs";
 import { fetchRecords, postTemplate } from "./nostr.mjs";
 import { recordPass, planSwaps, SILENT_DAYS } from "../js/relayhealth.mjs";
 
+// A relay connection can report an error after it has already been finished
+// with. Left alone, that would end the whole pass part-way — after one
+// Crowdlock's register was saved but before the next was read or the commit
+// message written. Log it and carry on; anything missed is judged again on
+// the next pass in any case.
+process.on("unhandledRejection", (e) => console.log(`A relay connection failed after we were done with it: ${e?.message ?? e}`));
+process.on("uncaughtException", (e) => console.log(`A relay connection failed after we were done with it: ${e?.message ?? e}`));
+
 // This folder holds the inbox code and its two state files. The repository
 // root is the first folder above it that holds crowdlocks/: the parent of
 // method/relay/ in a founder's repository, and two levels up in this one (the code
