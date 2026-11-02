@@ -9,7 +9,7 @@
 // signed for it to go. What it can do is refuse, and what it must never do is
 // disappear, because a fund that cannot co-sign can never buy anything.
 //
-// SO THE PAPER IS THE KEY, NOT THE MACHINE. The twenty-four words below are
+// SO THE PAPER IS THE KEY, NOT THE MACHINE. The twelve words below are
 // the co-signer. The computer running this is an appliance: it can be dropped
 // in a canal and rebuilt from the words in twenty minutes. Protect the paper
 // and nothing else about this machine matters.
@@ -50,9 +50,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const label = process.argv[2] ? `${process.argv[2]} co-signer key` : "Co-signer key: write the Crowdlock's name here";
   const rule = () => line("=".repeat(74));
 
-  // 256 bits from the operating system's own source, which is what every
+  // 128 bits from the operating system's own source, which is what every
   // wallet uses. Not Math.random, not anything of ours.
-  const mnemonic = bip39.generateMnemonic(wordlist, 256);
+  // Twelve words: 128 bits, as strong as the key they make, which cannot be
+  // stronger than about 128 bits however many words protect it. Twenty-four
+  // add copying mistakes, not security. (24 still restore, from anywhere.)
+  const mnemonic = bip39.generateMnemonic(wordlist, 128);
   const words = mnemonic.split(" ");
   const pubkey = pubkeyFromWords(mnemonic);
 

@@ -74,7 +74,8 @@ rule("A CO-SIGNER KEY OF ITS OWN");
 check("The standard test words give the standard co-signer key (same as cosigner/generate.mjs)",
   cosignerKeyFromWords(vector).publicKey === "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c");
 const coWords = newCosignerWords();
-check("A new co-signer key has its own 24 words", coWords.split(" ").length === 24 && wordsAreValid(coWords) && coWords !== words);
+check("A new co-signer key has its own 12 words", coWords.split(" ").length === 12 && wordsAreValid(coWords) && coWords !== words);
+check("A co-signer key made with 24 words elsewhere still restores", /^0[23][0-9a-f]{64}$/.test(cosignerKeyFromWords(twentyFour).publicKey));
 check("Checking a paper copy offers standard words for what's typed, never the answer itself",
   suggestWords("aban").includes("abandon") && suggestWords("").length === 0 && suggestWords("zzz").length === 0 && suggestWords("a").length === 4);
 check("The same words always give the same key, typed messily or not",

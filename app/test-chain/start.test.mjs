@@ -132,7 +132,9 @@ check("Up to date, behind, made before versions, the source, or not the app's",
   versionStatus(template.version, template.version, true) === "current" && versionStatus("2026-10-31", template.version, true) === "behind"
     && versionStatus(null, template.version, true) === "behind" && versionStatus("source\n", template.version, true) === "source"
     && versionStatus(null, template.version, false) === "unknown");
-check("An update lists only what changed since", changesSince("2026-10-31", template.changes).length === 1 && changesSince(null, template.changes).length === template.changes.length);
+check("An update lists only what changed since",
+  changesSince("2026-10-31", template.changes).every((c) => c.version > "2026-10-31") && changesSince("2026-10-31", template.changes).length === template.changes.length - 1
+    && changesSince(null, template.changes).length === template.changes.length && changesSince(template.version, template.changes).length === 0);
 check("An update never touches the declaration, register, settings or front page",
   !Object.keys(template.files).some((p) => /^(crowdlocks\/|test\/|declaration\.txt|registrations\.json|destinations\.json|index\.html|README\.md)/.test(p)));
 

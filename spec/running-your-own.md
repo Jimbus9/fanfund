@@ -139,7 +139,8 @@ to the fingerprint it claims, and that its register files agree with it.
 
 ## Making a co-signer key
 
-A co-signer key is an ordinary bitcoin key: **24 words of its own**, at the
+A co-signer key is an ordinary bitcoin key: **12 words of its own** (24 from
+a hardware wallet work just as well), at the
 first address of a standard native segwit wallet, `m/84'/0'/0'/0/0`. Nothing
 about it belongs to any one program, so make it whichever way you trust:
 

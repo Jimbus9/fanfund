@@ -847,7 +847,7 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
 // ---------------------------------------------------------------------------
 // Making a co-signer key
 //
-// Its own 24 words, shown once to be written on paper and never saved; only
+// Its own 12 words, shown once to be written on paper and never saved; only
 // the public half leaves the screen, by QR code. The same words make the same
 // key in cosigner/generate.mjs, Sparrow or Electrum, so nothing here is
 // needed to use it later. Done with the phone in airplane mode.
@@ -868,7 +868,7 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
       <Text style={s.h1}>Make a co-signer key</Text>
       <Text style={s.p}>A Crowdlock's co-signer adds the second signature that lets a funded purchase go through. The key can't take or keep anyone's money — it can only complete what members already signed for, or refuse.</Text>
       <Text style={[s.p, s.bold]}>Switch on airplane mode before you start, and leave it on until you've finished.</Text>
-      <Text style={s.note}>You'll get 24 words to write on paper, twice — one copy kept outside your house. Those words are the key. They're never saved on this phone, and the same words work in other wallets (Sparrow, Electrum) or the project's own script, so you never depend on this app. Never use your wallet's own words for this.</Text>
+      <Text style={s.note}>You'll get 12 words to write on paper, twice — one copy kept outside your house. Those words are the key. They're never saved on this phone, and the same words work in other wallets (Sparrow, Electrum) or the project's own script, so you never depend on this app. Never use your wallet's own words for this.</Text>
       <Button label="Make a new co-signer key" onPress={() => { setCoWords(newCosignerWords()); setStage("show"); }} />
       <Button label="Check words I already have" kind="plain" onPress={() => setStage("existing")} />
       <Button label="Back" kind="plain" onPress={leave} />
@@ -899,7 +899,7 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
   if (stage === "existing") return (
     <View>
       <Text style={s.h1}>Check co-signer words</Text>
-      <Text style={s.p}>Type the 24 words from your paper to see the public key they make — the way to prove the paper works.</Text>
+      <Text style={s.p}>Type the words from your paper (12, or 24 for a key made elsewhere) to see the public key they make — the way to prove the paper works.</Text>
       <TextInput style={[s.input, { minHeight: 120, textAlignVertical: "top" }]} multiline autoCapitalize="none" autoCorrect={false} value={typed} onChangeText={(t) => { setTyped(t); setProblem(null); }} />
       {problem && <Text style={s.error}>{problem}</Text>}
       <Button label="Show the key" onPress={() => {

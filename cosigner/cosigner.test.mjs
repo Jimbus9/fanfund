@@ -38,7 +38,7 @@ check("…the same one, every time", pubkeyFromWords(KNOWN) === key);
 check("…compressed, 33 bytes, as the lock requires", key.length === 66);
 check("…at the standard path, so any wallet can restore it", PATH === "m/84'/0'/0'/0/0", PATH);
 
-// The things somebody will actually do wrong when typing 24 words off paper.
+// The things somebody will actually do wrong when typing words off paper.
 check("Extra spaces and line breaks are forgiven",
   pubkeyFromWords(`  ${KNOWN.replace(/ /g, "   ")}\n `) === key);
 check("Capitals are forgiven", pubkeyFromWords(KNOWN.toUpperCase()) === key);

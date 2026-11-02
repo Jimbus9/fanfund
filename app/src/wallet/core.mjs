@@ -132,7 +132,7 @@ export function cosignerFromWords(text, network = "mainnet") {
 // ---------------------------------------------------------------------------
 // A co-signer key of its own
 //
-// The key that co-signs purchases for a Crowdlock. It has its own 24 words,
+// The key that co-signs purchases for a Crowdlock. It has its own 12 words,
 // never the member's, and sits at the ordinary first-address slot of a
 // standard wallet — m/84'/0'/0'/0/0, the same as cosigner/generate.mjs — so
 // the same words give the same key here, in that script, in Sparrow or in
@@ -143,9 +143,13 @@ export function cosignerFromWords(text, network = "mainnet") {
 
 export const COSIGNER_PATH = "m/84'/0'/0'/0/0";
 
-/** Twenty-four new words for a co-signer key, from the phone's secure random source. */
+/**
+ * Twelve new words for a co-signer key, from the phone's secure random source.
+ * Twelve, like the wallet's: 128 bits, as strong as the key they make, and
+ * fewer to copy wrongly. Keys made with 24 elsewhere still restore here.
+ */
 export function newCosignerWords() {
-  return generateMnemonic(wordlist, 256);
+  return generateMnemonic(wordlist, 128);
 }
 
 /** The co-signer public key these words make. Same answer as cosigner/generate.mjs. */

@@ -8,7 +8,7 @@
 //   1. Straight after generating, from the paper you just wrote, to catch a
 //      misheard word or a swapped line while the words are still on screen.
 //   2. After wiping the machine and rebuilding it from scratch, to prove the
-//      whole thing really can be reconstructed from twenty-four words and
+//      whole thing really can be reconstructed from the words and
 //      nothing else. That second run is the one that matters, and it is the
 //      step most people skip.
 //
@@ -29,7 +29,8 @@ rule();
 line("  RESTORING THE CO-SIGNER KEY FROM THE WORDS");
 rule();
 line();
-line("  Type all twenty-four words, separated by spaces, then press Enter.");
+line("  Type all the words (12, or 24 for an older key), separated by spaces,");
+line("  then press Enter.");
 line("  Read them off the paper, not off a screen — the paper is what you");
 line("  are testing.");
 line();
