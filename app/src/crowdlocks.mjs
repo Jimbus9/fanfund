@@ -21,6 +21,7 @@
 
 import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../../method/js/crowdlock.mjs";
 import { esploraChain } from "./wallet/esplora.mjs";
+import { earlyReleases } from "../../method/js/release.mjs";
 
 // This build's starting list and counting-rule link live in ./build.mjs, the
 // one file that differs between builds of the app.
@@ -95,6 +96,7 @@ export async function loadCrowdlock(url, fetchImpl = globalThis.fetch) {
     declarationText,
     statement: membershipStatement(crowdlock),
     register: registrations,
+    destinations,
   };
 }
 
@@ -161,6 +163,31 @@ export async function committedTotal(loaded, fetchImpl = globalThis.fetch, now =
     }
   }
   return { sats, locks: counted, members: committed.size };
+}
+
+/**
+ * The co-signer's record: every lock on the register that the co-signer helped
+ * open before its date, other than to pay a listed destination. Read from the
+ * chain alone, so nobody — the co-signer included — can keep one off it.
+ * Returns { releases: [{ address, member, txid, at, sats, paidTo, confirmed, cosigner }], unreadable }.
+ */
+export async function coSignerRecord(loaded, fetchImpl = globalThis.fetch, now = Math.floor(Date.now() / 1000)) {
+  const { crowdlock, register, destinations } = loaded;
+  const chain = esploraChain(crowdlock.chain_api, fetchImpl);
+  const seen = new Set();
+  const releases = [];
+  let unreadable = 0;
+  for (const lock of register.locks ?? []) {
+    const address = String(lock.address).toLowerCase();
+    if (seen.has(address)) continue;
+    seen.add(address);
+    try {
+      for (const r of earlyReleases(lock, await chain.txs(lock.address), destinations ?? null, now)) {
+        releases.push({ address: lock.address, member: lock.member ?? null, ...r });
+      }
+    } catch { unreadable++; }
+  }
+  return { releases, unreadable };
 }
 
 /**

@@ -43,7 +43,7 @@ const createRepo = createCrowdlockRepo as (x: any) => Promise<any>;
 // @ts-ignore — plain module shared with the chain tests
 import {
   STARTING_LIST, loadCrowdlock, membershipOf, committedTotal, submitJoin, COUNTING_RULE_URL, poundsPerBtc, shortBtc,
-  locksOnRegister, submitLock, newestCosigner, pathInRepo, keyChanges, historyLinkFor, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
+  locksOnRegister, submitLock, newestCosigner, pathInRepo, keyChanges, historyLinkFor, coSignerRecord, openLinkFor, fileUrlFromOpenLink, shareLinkFor, rankFound, matchesSearch,
   repoFromFileUrl, versionStatus, changesSince, baseFor,
 } from "./src/crowdlocks.mjs";
 // @ts-ignore — plain module
@@ -432,6 +432,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [keyChange, setKeyChange] = useState<{ added: string[]; removed: string[] } | null>(null);
+  const [record, setRecord] = useState<{ releases: any[]; unreadable: number } | null>(null);
 
   const load = useCallback(async () => {
     const loaded: Loaded = await loadCrowdlock(url);
@@ -444,6 +445,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
       if (seen === null) await saveSeenKeys(url, keys).catch(() => {});
       setKeyChange(ch.changed ? { added: ch.added, removed: ch.removed } : null);
       committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
+      coSignerRecord(loaded).then(setRecord).catch(() => setRecord(null));
       poundsPerBtc(loaded.crowdlock).then(setGbp);
     }
   }, [url]);
@@ -516,6 +518,14 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
               <Button label={busy ? "Signing and sending…" : "Sign and join"} disabled={busy} onPress={join} />
             </>}
       {result && <Text style={result.ok ? s.good : s.error}>{result.text}</Text>}
+
+      {record && record.releases.length > 0 && <View style={s.panel}>
+        <Text style={s.error}>The co-signer has released {record.releases.length === 1 ? "a lock" : `${record.releases.length} locks`} early.</Text>
+        <Text style={s.note}>A lock can only open before its date with the co-signer's signature, and the co-signer is meant to sign only for a purchase. {record.releases.length === 1 ? "This one wasn't" : "These weren't"} — the money went somewhere other than a listed destination. The chain records it, so it can't be hidden.</Text>
+        {record.releases.map((r) => <Text key={r.txid + r.address} style={s.note}>• {btc(BigInt(r.sats))} on {new Date(r.at * 1000).toISOString().slice(0, 10)}{r.confirmed ? "" : " (not yet in a block)"}, co-signer {String(r.cosigner ?? "?").slice(0, 10)}…, paid to {String(r.paidTo ?? "?").slice(0, 12)}…</Text>)}
+        <Text style={s.note}>Ask the founder why. A co-signer who signs early releases makes the committed total untrustworthy.</Text>
+      </View>}
+      {record && record.releases.length === 0 && (c.register.locks ?? []).length > 0 && <Text style={s.note}>Co-signer: no early releases{record.unreadable ? ` (${record.unreadable} lock${record.unreadable === 1 ? "" : "s"} couldn't be checked just now)` : ""}.</Text>}
 
       {keyChange && <View style={s.panel}>
         <Text style={s.error}>This Crowdlock's co-signer keys have changed since you last looked.</Text>

@@ -169,6 +169,20 @@ lock still goes home on its date. Signing, when a proposal is funded, can be
 done the same three ways, because commitments are standard partially signed
 transactions in the published format.
 
+## The co-signer's record
+
+A lock opens two ways: by its owner alone once its date has passed, or by its
+owner and the co-signer together at any time. The second is meant only for a
+purchase, but Bitcoin cannot enforce that. A co-signer willing to sign anything
+could let members take counted money back early.
+
+What Bitcoin does record is which way each lock was opened: a co-signed spend
+carries the co-signer's signature in its witness, and nothing can disguise it.
+So the register page and the app list every lock opened before its date with
+the co-signer's signature that did not pay a listed destination, read straight
+from the chain (`method/js/release.mjs`). A co-signer cannot keep one off it.
+Choose co-signers who would rather refuse than appear there.
+
 ## Putting the key in, and changing it later
 
 **Starting a Crowdlock in the app:** it asks for the public key and will not

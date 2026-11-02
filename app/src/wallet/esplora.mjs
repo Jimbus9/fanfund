@@ -69,6 +69,8 @@ export function esploraChain(baseUrl, rawFetch = globalThis.fetch, timeoutMs = T
       return list.map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, confirmed: !!u.status?.confirmed }));
     },
     txHex: (txid) => get(`/tx/${txid}/hex`, "text"),
+    /** The address's transactions, newest first, with each input's witness. */
+    txs: (address) => get(`/address/${address}/txs`),
     /** Has anything ever been sent to this address, confirmed or not? */
     async everFunded(address) {
       const a = await get(`/address/${address}`);

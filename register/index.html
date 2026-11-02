@@ -45,6 +45,16 @@
   </section>
 
   <section>
+    <h2>The co-signer's record</h2>
+    <div class="panel">
+      <div class="verdict" id="releaseVerdict"><span class="dot"></span><span id="releaseText">Checking…</span></div>
+      <p class="note" id="releaseDetail">Read from the blockchain in your browser.</p>
+      <div id="releaseArea"></div>
+    </div>
+    <p class="note"><strong>Why this is here.</strong> A lock opens two ways: by its owner alone once its date has passed, or by its owner and the co-signer together at any time. The second is meant only for a purchase, but Bitcoin can't enforce that — a co-signer willing to sign anything could let members take counted money back early, and the total above would mean nothing. What Bitcoin does record, for everyone to see, is which way each lock was opened. So every lock opened early with the co-signer's signature, other than to pay a listed destination, is shown here. Nobody can keep one off this list, the co-signer included.</p>
+  </section>
+
+  <section>
     <h2>What your browser just checked</h2>
     <div class="panel">
       <div class="verdict" id="verdict"><span class="dot"></span><span id="verdictText">Checking…</span></div>
@@ -106,6 +116,7 @@ python3 -m http.server      # then open localhost:8000/register/</pre>
 <script type="module">
 import { verifyMembership } from "../method/js/verify.mjs";
 import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../method/js/crowdlock.mjs";
+import { earlyReleases } from "../method/js/release.mjs";
 
 const el = (id) => document.getElementById(id);
 const fmtBtc = (sats) => (sats / 1e8).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") || "0";
@@ -281,6 +292,52 @@ if (locks.length === 0) {
   el("asOf").textContent = unreachable === 0
     ? "Read from the blockchain just now, in your browser."
     : `${unreachable} lock${unreachable === 1 ? "" : "s"} could not be read from the chain, so this figure is incomplete.`;
+}
+
+// ---- The co-signer's record ----------------------------------------------
+
+{
+  const seenRel = new Set();
+  const found = [];
+  let unread = 0;
+  let destinations = null;
+  try { destinations = await getJson(`../${crowdlock.register.destinations}`); } catch {}
+  for (const lock of locks) {
+    const address = String(lock.address).toLowerCase();
+    if (seenRel.has(address)) continue;
+    seenRel.add(address);
+    try {
+      const res = await fetch(`${CHAIN_API}/address/${lock.address}/txs`);
+      if (!res.ok) throw new Error(String(res.status));
+      for (const r of earlyReleases(lock, await res.json(), destinations)) found.push({ ...r, address: lock.address });
+    } catch { unread++; }
+  }
+  const short = (x) => (x ? `${String(x).slice(0, 8)}…${String(x).slice(-6)}` : "");
+  // The explorer's own page for the transaction, so anyone can see it for themselves.
+  const txLink = (txid) => `${String(CHAIN_API).replace(/\/api$/, "")}/tx/${txid}`;
+  const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+  if (found.length === 0) {
+    setVerdict(el("releaseVerdict"), el("releaseText"), unread === 0,
+      locks.length === 0 ? "No locks yet, so nothing to release" : unread === 0 ? "No early releases" : "Could not check every lock");
+    el("releaseDetail").textContent = locks.length === 0
+      ? "When members lock money, any lock the co-signer opens early will show here."
+      : unread === 0
+      ? "Every lock on the register has either stayed shut, opened on its date, or paid a listed destination."
+      : `${unread} lock${unread === 1 ? "" : "s"} could not be read from the chain just now. Reload to try again.`;
+  } else {
+    setVerdict(el("releaseVerdict"), el("releaseText"), false,
+      `${found.length} lock${found.length === 1 ? "" : "s"} released early by the co-signer`);
+    el("releaseDetail").textContent = "Each of these opened before its date with the co-signer's signature, and did not pay a listed destination.";
+    el("releaseArea").innerHTML = `<div class="scroller"><table>
+      <thead><tr><th>When</th><th>Amount</th><th>Co-signer</th><th>Transaction</th></tr></thead>
+      <tbody>${found.map((r) => `<tr>
+        <td>${r.confirmed ? new Date(r.at * 1000).toISOString().slice(0, 10) : "not yet in a block"}</td>
+        <td>${fmtBtc(r.sats)} BTC</td>
+        <td class="mono" title="${esc(r.cosigner ?? "")}">${esc(short(r.cosigner))}</td>
+        <td class="mono"><a href="${esc(txLink(r.txid))}" title="${esc(r.txid)}">${esc(short(r.txid))}</a></td>
+      </tr>`).join("")}</tbody>
+    </table></div>`;
+  }
 }
 
 // ---- Check-your-own tool -------------------------------------------------

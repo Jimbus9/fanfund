@@ -199,6 +199,31 @@ check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
   check("Every co-signer key this repository publishes is a real public key", bad.length === 0, bad.join(", "));
 }
 
+// The app's lock must be the very script the method's reference code reads,
+// or the early-release detector would be reading the wrong shape of witness.
+{
+  const { accountFromWords, lockFor } = await import("../src/wallet/core.mjs");
+  const { lockAddress } = await import("../../method/js/lockrecord.mjs");
+  const acct = accountFromWords("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", "testnet4");
+  const cosignerPubkey = "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c";
+  const l = lockFor({ account: acct, cosignerPubkey, locktime: 1893456000 });
+  check("The app's lock is byte-for-byte the method's lock script",
+    l.address === lockAddress({ ownerPubkey: acct.publicKey, cosignerPubkey, locktime: 1893456000 }, "tb"), l.address);
+}
+
+// The co-signer's record, as the Crowdlock screen reads it.
+{
+  const { coSignerRecord } = await import("../src/crowdlocks.mjs");
+  const L = { address: "tb1qlock", locktime: 2000000000, member: "tb1qm", cosigner_pubkey: "02cc" };
+  const early = { txid: "e1", status: { confirmed: true, block_time: 1900000000 }, vin: [{ prevout: { scriptpubkey_address: "tb1qlock", value: 5000 }, witness: ["aa", "", "bb", "cc"] }], vout: [{ scriptpubkey_address: "tb1qelsewhere" }] };
+  const onDate = { txid: "h1", status: { confirmed: true, block_time: 2000000100 }, vin: [{ prevout: { scriptpubkey_address: "tb1qlock2", value: 5000 }, witness: ["01", "bb", "cc"] }], vout: [{ scriptpubkey_address: "tb1qm" }] };
+  const loaded = { crowdlock: { chain_api: "https://rec" }, register: { locks: [L, { ...L, address: "tb1qlock2" }, L] }, destinations: { entries: [] } };
+  const fake = async (url) => Response.json(String(url).includes("tb1qlock2") ? [onDate] : [early]);
+  const rec = await coSignerRecord(loaded, fake);
+  check("The Crowdlock screen finds a co-signer's early release, once, and nothing else",
+    rec.releases.length === 1 && rec.releases[0].txid === "e1" && rec.releases[0].member === "tb1qm" && rec.unreadable === 0);
+}
+
 // Warning members when a Crowdlock's co-signer keys change.
 {
   const { keyChanges, historyLinkFor } = await import("../src/crowdlocks.mjs");
