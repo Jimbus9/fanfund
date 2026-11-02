@@ -10,7 +10,7 @@ const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 
 const config = getDefaultConfig(__dirname);
-config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, "..", "js")];
+config.watchFolders = [...(config.watchFolders ?? []), path.resolve(__dirname, "..", "method", "js")];
 if (!config.resolver.sourceExts.includes("mjs")) config.resolver.sourceExts.push("mjs");
 // The chain tests live beside the app but must never be bundled into it.
 config.resolver.blockList = [/test-chain\/.*/];
