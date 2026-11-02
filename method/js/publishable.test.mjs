@@ -9,13 +9,13 @@
 // A .nojekyll file at the root turns Jekyll off. This test makes sure it stays
 // there, and that nothing else the browser needs would be dropped.
 //
-// Run:  node js/publishable.test.mjs
+// Run:  node method/js/publishable.test.mjs
 
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
 
-const R = fileURLToPath(new URL("../", import.meta.url));
+const R = fileURLToPath(new URL("../../", import.meta.url));
 let failures = 0;
 const check = (name, ok, detail = "") => {
   if (!ok) failures++;
@@ -49,7 +49,7 @@ check(`${underscored.length} underscored path(s) — safe only because .nojekyll
 
 // Follow the import graph from each browser entry point and prove every hop
 // resolves to a file that exists.
-const ENTRIES = ["js/verify.mjs", "js/crowdlock.mjs"];
+const ENTRIES = ["method/js/verify.mjs", "method/js/crowdlock.mjs"];
 const missing = [];
 const seen = new Set();
 function follow(file) {

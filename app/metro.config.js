@@ -3,7 +3,7 @@
 //   * .mjs files, so the key module and Crowdlock loader — written as plain
 //     modules so the same files run in the phone and in the chain tests — are
 //     picked up;
-//   * the repository's js/ folder, so the app checks Crowdlocks and builds
+//   * the repository's method/js/ folder, so the app checks Crowdlocks and builds
 //     message hashes with exactly the code the register page uses, rather
 //     than a copy that could drift.
 const path = require("path");

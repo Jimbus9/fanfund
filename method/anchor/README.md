@@ -40,8 +40,8 @@ tidier. Revisit it when the fund has money of its own and a reason.
 
 ```
 cd anchor && npm install        once
-node anchor/stamp.mjs           anchors spec/declaration-v1.txt
-node anchor/stamp.mjs ../registrations.json    or any other file
+node method/anchor/stamp.mjs           anchors spec/declaration-v1.txt
+node method/anchor/stamp.mjs ../registrations.json    or any other file
 ```
 
 It writes `<file>.ots` beside the file. **Commit both.**
@@ -64,7 +64,7 @@ Going back and asking is the whole of the next step. OpenTimestamps calls it
 nothing of the kind, and the word is kept out of this project's own output.
 
 ```
-node anchor/verify.mjs          the next day
+node method/anchor/verify.mjs          the next day
 ```
 
 This checks the proof belongs to the file — pure arithmetic, no internet
@@ -109,6 +109,6 @@ the register is small — one more automated dependency is not worth it yet.
 ## Verifying somebody else's anchor
 
 Anybody can, with nothing but the file, the `.ots` beside it, and a view of
-the blockchain. `node anchor/verify.mjs <file>` does it, and so does the
+the blockchain. `node method/anchor/verify.mjs <file>` does it, and so does the
 standard `ots verify` client, because the proof is in the ordinary
 OpenTimestamps format and not anything of ours.

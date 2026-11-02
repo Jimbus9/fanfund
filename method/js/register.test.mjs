@@ -1,6 +1,6 @@
 // The live register must be true, not just well-formed.
 //
-// Run:  node js/register.test.mjs
+// Run:  node method/js/register.test.mjs
 //
 // Every other test in this repository works on invented data. This one works
 // on the real registrations.json that the site serves, and asks the questions
@@ -23,7 +23,7 @@ import { verifyMembership } from "./verify.mjs";
 import { checkRegisterFiles, membershipStatement } from "./crowdlock.mjs";
 import { lockAddress, hrpFor } from "./lockrecord.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => JSON.parse(readFileSync(join(root, p), "utf8"));
 
 let failures = 0;

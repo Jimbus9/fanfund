@@ -849,7 +849,7 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
 //
 // Its own 12 words, shown once to be written on paper and never saved; only
 // the public half leaves the screen, by QR code. The same words make the same
-// key in cosigner/generate.mjs, Sparrow or Electrum, so nothing here is
+// key in method/cosigner/generate.mjs, Sparrow or Electrum, so nothing here is
 // needed to use it later. Done with the phone in airplane mode.
 // ---------------------------------------------------------------------------
 
@@ -1007,8 +1007,15 @@ function LookAfter({ c }: { c: Extract<Loaded, { ok: true }> }) {
     const site = baseFor(c.url);
     (async () => {
       let v: string | null = null, hasInbox = false;
-      try { const r = await fetch(`${site}relay/VERSION`, { cache: "no-store" }); if (r.ok) v = await r.text(); } catch {}
-      if (v === null) { try { hasInbox = (await fetch(`${site}relay/inbox.mjs`, { cache: "no-store" })).ok; } catch {} }
+      // A founder's site keeps its inbox at relay/; this repository keeps it under method/.
+      for (const folder of ["relay/", "method/relay/"]) {
+        try { const r = await fetch(`${site}${folder}VERSION`, { cache: "no-store" }); if (r.ok) { v = await r.text(); break; } } catch {}
+      }
+      if (v === null) {
+        for (const folder of ["relay/", "method/relay/"]) {
+          try { if ((await fetch(`${site}${folder}inbox.mjs`, { cache: "no-store" })).ok) { hasInbox = true; break; } } catch {}
+        }
+      }
       setPublished(v);
       setStatus(versionStatus(v, template.version, hasInbox));
     })();

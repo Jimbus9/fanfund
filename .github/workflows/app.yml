@@ -16,8 +16,8 @@ on:
     branches: [main]
     # The inbox code too: the app carries a copy of it for founders' new
     # Crowdlocks, and the build fails if that copy has fallen out of date.
-    # (relay/health.json is left out — the inbox writes it daily.)
-    paths: ["app/**", ".github/workflows/app.yml", "js/*.mjs", "js/vendor/**", "relay/*.mjs", "relay/package*.json"]
+    # (method/relay/health.json is left out — the inbox writes it daily.)
+    paths: ["app/**", ".github/workflows/app.yml", "method/js/*.mjs", "method/js/vendor/**", "method/relay/*.mjs", "method/relay/package*.json"]
   workflow_dispatch:
 
 permissions:
@@ -44,8 +44,8 @@ jobs:
 
       - name: Install the lock tools' libraries
         # The app's tests check its signatures against bitcoinjs-message and
-        # its locks against lock/lock.mjs, both installed here.
-        working-directory: lock
+        # its locks against method/lock/lock.mjs, both installed here.
+        working-directory: method/lock
         run: npm ci
 
       - name: Test the key module on a private chain

@@ -28,9 +28,9 @@
 // front of it, maintained by people who do that for a living rather than
 // hand-rolled here and got wrong.
 
-import { addRegistration } from "./js/append.mjs";
-import { prepareLock, addLock, hrpFor } from "./js/lockrecord.mjs";
-import { membershipStatement } from "./js/crowdlock.mjs";
+import { addRegistration } from "./method/js/append.mjs";
+import { prepareLock, addLock, hrpFor } from "./method/js/lockrecord.mjs";
+import { membershipStatement } from "./method/js/crowdlock.mjs";
 
 const REPO = "Jimbus9/fanfund";
 const BRANCH = "main";

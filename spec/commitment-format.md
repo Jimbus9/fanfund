@@ -147,7 +147,7 @@ trace.
 
 ## Reference implementation
 
-`lock/commitment.mjs`, with `lock/commitment.test.mjs` proving it offline.
+`method/lock/commitment.mjs`, with `method/lock/commitment.test.mjs` proving it offline.
 
 It builds a commitment, verifies one against a proposal and a destinations list,
 and completes one with the co-signer's signature. The tests cover the ways a

@@ -14,7 +14,7 @@ import { membershipStatement } from "../js/crowdlock.mjs";
 import { hrpFor } from "../js/lockrecord.mjs";
 import { postRecord } from "./nostr.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const name = process.argv[2];
 if (!name) { console.log("Name the Crowdlock to test, for example: node selftest.mjs kop-fund-testnet4"); process.exit(1); }
 const crowdlock = JSON.parse(readFileSync(join(ROOT, "crowdlocks", `${name}.json`), "utf8"));

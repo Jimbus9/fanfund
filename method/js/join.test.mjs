@@ -5,7 +5,7 @@
 // verifyMembership. If those agree with a signature made by a real wallet
 // library, the page will accept a real member and reject everything else.
 //
-// Run:  node js/join.test.mjs
+// Run:  node method/js/join.test.mjs
 
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -18,7 +18,7 @@ import { verifyMembership } from "./verify.mjs";
 import { membershipStatement } from "./crowdlock.mjs";
 
 const ECPair = ECPairFactory(ecc);
-const R = fileURLToPath(new URL("../", import.meta.url));
+const R = fileURLToPath(new URL("../../", import.meta.url));
 
 let failures = 0;
 const check = (name, got, want, detail = "") => {

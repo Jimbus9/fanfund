@@ -1,6 +1,6 @@
 // The deployment configuration, checked here rather than on a phone.
 //
-// Run:  node js/worker.test.mjs
+// Run:  node method/js/worker.test.mjs
 //
 // The first attempt to deploy this site failed in Cloudflare's build, which
 // is a slow and unpleasant place to find a mistake — especially for somebody
@@ -17,7 +17,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-const R = join(dirname(fileURLToPath(import.meta.url)), "..");
+const R = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 let failures = 0;
 const check = (what, ok, detail = "") => {
   if (!ok) failures++;
@@ -53,7 +53,7 @@ check("A compatibility date is pinned", /^\d{4}-\d{2}-\d{2}$/.test(config.compat
 const ignored = readFileSync(join(R, ".assetsignore"), "utf8")
   .split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
 
-for (const needed of ["node_modules", "worker.js", "wrangler.jsonc", "lock/"]) {
+for (const needed of ["node_modules", "worker.js", "wrangler.jsonc", "method/lock/"]) {
   check(`.assetsignore excludes ${needed}`, ignored.includes(needed));
 }
 
@@ -105,8 +105,8 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
 // is the only way to try the route before a co-signer key exists, because
 // until then every real lock is (correctly) refused.
 {
-  const proven = await import(join(R, "lock", "lock.mjs"));
-  const { memberAddressForOwnerKey } = await import(join(R, "js", "verify.mjs"));
+  const proven = await import(join(R, "method", "lock", "lock.mjs"));
+  const { memberAddressForOwnerKey } = await import(join(R, "method", "js", "verify.mjs"));
   const key = (seed) => Buffer.from(proven.ECPair.fromPrivateKey(Buffer.alloc(32, seed)).publicKey).toString("hex");
   const OWNER = key(1), COSIGNER = key(2);
   const kop = JSON.parse(readFileSync(join(R, "crowdlocks", "kop-fund.json"), "utf8"));
@@ -244,10 +244,10 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
 // chosen with ?c=. What must never happen is a test signature landing on the
 // real register, or a real one on the test register.
 {
-  const proven = await import(join(R, "lock", "lock.mjs"));
-  const bitcoinMessage = (await import(join(R, "lock", "node_modules", "bitcoinjs-message", "index.js"))).default;
-  const bitcoin = await import(join(R, "lock", "node_modules", "bitcoinjs-lib", "src", "index.js"));
-  const { membershipStatement } = await import(join(R, "js", "crowdlock.mjs"));
+  const proven = await import(join(R, "method", "lock", "lock.mjs"));
+  const bitcoinMessage = (await import(join(R, "method", "lock", "node_modules", "bitcoinjs-message", "index.js"))).default;
+  const bitcoin = await import(join(R, "method", "lock", "node_modules", "bitcoinjs-lib", "src", "index.js"));
+  const { membershipStatement } = await import(join(R, "method", "js", "crowdlock.mjs"));
 
   const test = JSON.parse(readFileSync(join(R, "crowdlocks", "kop-fund-testnet4.json"), "utf8"));
   const testReg = JSON.parse(readFileSync(join(R, test.register.registrations), "utf8"));
@@ -279,7 +279,7 @@ check("A GET on the lock endpoint is refused", lockGet.status === 405, String(lo
     const testSig = sign(membershipStatement(test));
     const ok = await post("?c=kop-fund-testnet4", { address: tbAddress, signature: testSig });
     const okBody = await ok.json();
-    check("A testnet4 signer joins the test Crowdlock", ok.status === 200 && okBody.n === JSON.parse(readFileSync(new URL("../" + test.register.registrations, import.meta.url), "utf8")).members.length + 1, okBody.error ?? `member ${okBody.n}`);
+    check("A testnet4 signer joins the test Crowdlock", ok.status === 200 && okBody.n === JSON.parse(readFileSync(new URL("../../" + test.register.registrations, import.meta.url), "utf8")).members.length + 1, okBody.error ?? `member ${okBody.n}`);
     check("…and it is written to the TEST register, nowhere else",
       written.length === 1 && written[0].path === test.register.registrations, written.map((w) => w.path).join(", "));
 

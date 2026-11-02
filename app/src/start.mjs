@@ -17,7 +17,7 @@
 //   index.html                       a plain front page with the join link
 //   + the relay inbox and its code (src/template.mjs)
 
-import { canonicalise, declarationHash, membershipStatement, checkCrowdlock, checkRegisterFiles, checkSeparate } from "../../js/crowdlock.mjs";
+import { canonicalise, declarationHash, membershipStatement, checkCrowdlock, checkRegisterFiles, checkSeparate } from "../../method/js/crowdlock.mjs";
 import template from "./template.mjs";
 
 /** The one line every declaration started in the app must keep, word for word. */

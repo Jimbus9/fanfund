@@ -200,11 +200,11 @@
 <!-- nostr-tools 2.25.2, the standard Nostr library (public domain), as its own
      ready-built browser file: it signs the message that carries a registration
      to the relays, so this page writes none of that itself. -->
-<script src="../js/vendor/nostr-tools-2.25.2.bundle.js"></script>
+<script src="../method/js/vendor/nostr-tools-2.25.2.bundle.js"></script>
 <script type="module">
-import { verifyMembership } from "../js/verify.mjs";
-import { membershipStatement } from "../js/crowdlock.mjs";
-import { recordEventTemplate } from "../js/inbox.mjs";
+import { verifyMembership } from "../method/js/verify.mjs";
+import { membershipStatement } from "../method/js/crowdlock.mjs";
+import { recordEventTemplate } from "../method/js/inbox.mjs";
 
 const el = (id) => document.getElementById(id);
 

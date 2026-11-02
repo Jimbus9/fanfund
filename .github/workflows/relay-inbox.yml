@@ -44,12 +44,12 @@ jobs:
           node-version: 22
 
       - name: Install the relay library
-        working-directory: relay
+        working-directory: method/relay
         run: npm ci --no-audit --no-fund
 
       - name: Self-test — post a new test member's registration
         if: ${{ inputs.selftest }}
-        working-directory: relay
+        working-directory: method/relay
         run: node selftest.mjs kop-fund-testnet4 && sleep 20
 
       # About fifty minutes of checking the relays every two minutes. Each pass
@@ -64,10 +64,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for pass in $(seq 1 24); do
             git pull --rebase -q || true
-            (cd relay && node inbox.mjs) || echo "This pass failed; trying again next pass."
-            if [ -n "$(git status --porcelain -- crowdlocks registrations.json relay/health.json relay/announced.json)" ]; then
-              git add crowdlocks registrations.json relay/health.json $(ls relay/announced.json 2>/dev/null)
-              git commit -q -m "$(cat relay/.message 2>/dev/null || echo 'Records via relays')"
+            (cd method/relay && node inbox.mjs) || echo "This pass failed; trying again next pass."
+            if [ -n "$(git status --porcelain -- crowdlocks registrations.json method/relay/health.json method/relay/announced.json)" ]; then
+              git add crowdlocks registrations.json method/relay/health.json $(ls method/relay/announced.json 2>/dev/null)
+              git commit -q -m "$(cat method/relay/.message 2>/dev/null || echo 'Records via relays')"
               pushed=no
               for i in 1 2 3; do
                 if git pull --rebase -q && git push -q; then pushed=yes; break; fi
@@ -77,7 +77,7 @@ jobs:
                 gh api -X POST "repos/${{ github.repository }}/pages/builds" > /dev/null || echo "Could not request a site rebuild."
               fi
             fi
-            rm -f relay/.message
+            rm -f method/relay/.message
             if [ "$pass" -lt 24 ]; then sleep 110; fi
           done
 

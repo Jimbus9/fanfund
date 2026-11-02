@@ -221,7 +221,7 @@ those terms cannot be altered after coins are sent to it.
 ## Taproot
 
 **Not in use.** Every lock this document specifies is P2WSH, built by
-`lock/lock.mjs`. A taproot version exists in `lock/taproot.mjs`, is tested, and
+`method/lock/lock.mjs`. A taproot version exists in `method/lock/taproot.mjs`, is tested, and
 is called by nothing. This section records what it would give and what would
 call for it, so the option stays open and nobody mistakes it for live.
 
@@ -261,7 +261,7 @@ Two things would call for taproot, and either is enough:
 The two forms may coexist if it comes to that — the counting rule treats them
 identically — but taproot must have its own live-network proof first.
 
-`lock/taproot.test.mjs` proves the taproot construction and its signatures
+`method/lock/taproot.test.mjs` proves the taproot construction and its signatures
 offline. Its enforcement has not yet been proven on a live network — unlike the
 P2WSH form, which now has been — which is the
 only reason this document still specifies P2WSH first.
@@ -300,7 +300,7 @@ fee really is most of the coin.
 
 ## Reference implementation
 
-`lock/` in the repository. `selftest.mjs` proves the construction offline;
+`method/lock/` in the repository. `selftest.mjs` proves the construction offline;
 `run-testnet.mjs` proves the network's enforcement, which no local test can.
 
 The four behaviours that must hold — **all four confirmed on testnet4, 25 and

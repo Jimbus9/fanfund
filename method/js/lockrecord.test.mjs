@@ -1,15 +1,15 @@
 // What the lock endpoint will accept and refuse.
 //
-// Run:  node js/lockrecord.test.mjs      (needs `npm install` in lock/ once,
+// Run:  node method/js/lockrecord.test.mjs      (needs `npm install` in method/lock/ once,
 //                                         for the cross-check against bitcoinjs)
 //
 // Two halves.
 //
-// First, the address. js/lockrecord.mjs rebuilds a lock address with a few
+// First, the address. method/js/lockrecord.mjs rebuilds a lock address with a few
 // lines of its own, because the endpoint cannot carry bitcoinjs. That is only
 // acceptable if it produces exactly the bytes the proven lock code does — the
 // code whose locks Bitcoin itself enforced on testnet4. So every script and
-// address here is compared against lock/lock.mjs, across networks and across
+// address here is compared against method/lock/lock.mjs, across networks and across
 // locktimes chosen to hit the awkward encodings.
 //
 // Second, the judgement — mostly refusals, because that is where the value is.
@@ -76,7 +76,7 @@ rule();
 console.log("WHAT THE ENDPOINT ACCEPTS");
 rule();
 
-const kop = JSON.parse(readFileSync(new URL("../crowdlocks/kop-fund.json", import.meta.url), "utf8"));
+const kop = JSON.parse(readFileSync(new URL("../../crowdlocks/kop-fund.json", import.meta.url), "utf8"));
 const crowdlock = { ...kop, cosigner_keys: [COSIGNER] };
 const member = memberAddressForOwnerKey(OWNER, "bc");
 const register = {

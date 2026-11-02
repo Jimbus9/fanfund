@@ -14,7 +14,7 @@ import { lockAddress } from "../js/lockrecord.mjs";
 import { applyRecords, recordEventTemplate, recordFromEvent, RECORD_KIND, announcementTemplate, announcementFromEvent, announcementDue, ANNOUNCE_KIND } from "../js/inbox.mjs";
 import { recordPass, planSwaps } from "../js/relayhealth.mjs";
 
-const ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = joinPath(dirname(fileURLToPath(import.meta.url)), "..", "..");
 let failures = 0;
 const check = (what, ok, detail = "") => { if (!ok) failures++; console.log(`${ok ? "PASS" : "FAIL"}  ${what.padEnd(70)} ${detail}`); };
 

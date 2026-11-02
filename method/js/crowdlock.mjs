@@ -126,7 +126,7 @@ export function checkCrowdlock(c, { declarationText } = {}) {
   }
 
   // Optional. Public Nostr relays where members post signed registrations and
-  // locks, for the Crowdlock's own repository to collect (js/inbox.mjs). No
+  // locks, for the Crowdlock's own repository to collect (method/js/inbox.mjs). No
   // account, no server and no key of anybody's sits in that path.
   if (c.relays !== undefined) {
     need(Array.isArray(c.relays) && c.relays.length > 0 && c.relays.length <= 10
@@ -134,7 +134,7 @@ export function checkCrowdlock(c, { declarationText } = {}) {
       "relays, if given, must be a list of up to 10 wss:// addresses");
   }
   // Optional, published in advance: relays that replace a live one which has
-  // been silent for 7 days (relay/inbox.mjs). Chosen now, in public, so nobody
+  // been silent for 7 days (method/relay/inbox.mjs). Chosen now, in public, so nobody
   // picks a relay on the day.
   if (c.spare_relays !== undefined) {
     need(Array.isArray(c.relays), "spare_relays needs relays");

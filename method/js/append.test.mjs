@@ -13,7 +13,7 @@ import { join, dirname } from "node:path";
 import { addRegistration } from "./append.mjs";
 import { membershipStatement } from "./crowdlock.mjs";
 
-const R = join(dirname(fileURLToPath(import.meta.url)), "..");
+const R = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const crowdlock = JSON.parse(readFileSync(join(R, "crowdlocks/kop-fund.json"), "utf8"));
 const statement = membershipStatement(crowdlock);
 const today = "2026-10-27";

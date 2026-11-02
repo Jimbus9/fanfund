@@ -34,7 +34,7 @@ import { BIP32, Output, Psbt, signers, networks, keyExpressionBIP32 } from "@bit
 import * as ecc from "@bitcoinerlab/secp256k1";
 // The register's own verifier, shared with the website: the message hash a
 // signature is made over is computed by exactly the code that later checks it.
-import { messageHash } from "../../../js/verify.mjs";
+import { messageHash } from "../../../method/js/verify.mjs";
 
 /** Networks the wallet knows, and the coin type each uses in its key path. */
 export const NETWORKS = {
@@ -134,7 +134,7 @@ export function cosignerFromWords(text, network = "mainnet") {
 //
 // The key that co-signs purchases for a Crowdlock. It has its own 12 words,
 // never the member's, and sits at the ordinary first-address slot of a
-// standard wallet — m/84'/0'/0'/0/0, the same as cosigner/generate.mjs — so
+// standard wallet — m/84'/0'/0'/0/0, the same as method/cosigner/generate.mjs — so
 // the same words give the same key here, in that script, in Sparrow or in
 // Electrum, and nothing about it depends on this app. The words are shown
 // once to be written on paper and are never saved; only the public half is
@@ -152,7 +152,7 @@ export function newCosignerWords() {
   return generateMnemonic(wordlist, 128);
 }
 
-/** The co-signer public key these words make. Same answer as cosigner/generate.mjs. */
+/** The co-signer public key these words make. Same answer as method/cosigner/generate.mjs. */
 export function cosignerKeyFromWords(text) {
   const words = tidyWords(text);
   if (!wordsAreValid(words)) throw new Error("those are not valid backup words — check the spelling and the order");
@@ -271,9 +271,9 @@ export async function buildSend({ account, chain, to, amount, feeRate }) {
 //
 //   wsh(and_v(v:pk(owner),or_i(after(date),pk(cosigner))))
 //
-// The library check (lock/library-check) proved this gives byte-for-byte the
+// The library check (method/lock/library-check) proved this gives byte-for-byte the
 // testnet-proven script, and the app's tests prove it matches the address the
-// register rebuilds (js/lockrecord.mjs). Locking is an ordinary send to that
+// register rebuilds (method/js/lockrecord.mjs). Locking is an ordinary send to that
 // address. Going home is the library's own spend of the owner-alone branch,
 // which sets the transaction's date itself; the network refuses it until the
 // date has passed, whatever this code says.

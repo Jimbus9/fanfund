@@ -3,7 +3,7 @@
 // The app has no Crowdlock written into it. It starts from a list of links,
 // and a fan can add any other Crowdlock by pasting a link to its file, hosted
 // anywhere. Whether from the starting list or pasted in, every Crowdlock is
-// checked here with exactly the code the register page uses (js/crowdlock.mjs)
+// checked here with exactly the code the register page uses (method/js/crowdlock.mjs)
 // before the app will show it or let anybody sign anything:
 //
 //   * the file is complete and coherent
@@ -19,7 +19,7 @@
 // are relative to <site>/ — that is how this project's own files are laid out.
 // A file published anywhere else has its paths read relative to its own folder.
 
-import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../../js/crowdlock.mjs";
+import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../../method/js/crowdlock.mjs";
 import { esploraChain } from "./wallet/esplora.mjs";
 
 // This build's starting list and counting-rule link live in ./build.mjs, the
@@ -276,7 +276,7 @@ export function repoFromFileUrl(fileUrl) {
  *   "current"  up to date
  *   "behind"   an update is available
  *   "unknown"  not made by the app
- * `published` is the text of its relay/VERSION, or null if there is none.
+ * `published` is the text of its method/relay/VERSION, or null if there is none.
  */
 export function versionStatus(published, appVersion, hasInbox) {
   const v = typeof published === "string" ? published.trim() : null;

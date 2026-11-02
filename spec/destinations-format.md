@@ -166,7 +166,7 @@ Before completing any commitment, for the destination named in its proposal:
 Any check failing means the commitment is not completed. All five are mechanical;
 none is a judgement call.
 
-**All five now run in code.** `destinationIsPermitted` in `lock/commitment.mjs`
+**All five now run in code.** `destinationIsPermitted` in `method/lock/commitment.mjs`
 performs them, and `verifyCommitment` calls it on every commitment. Until
 26 October only three did: nothing verified an attestation signature anywhere
 in the project, so a list could have been edited freely and still read as

@@ -1,4 +1,4 @@
 node_modules/
 lock-state.json
-cosigner/cosigner-pubkey.txt
-relay/.message
+method/cosigner/cosigner-pubkey.txt
+method/relay/.message

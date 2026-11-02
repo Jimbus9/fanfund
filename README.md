@@ -17,12 +17,12 @@ General to any Crowdlock. Nothing in these files names Liverpool.
 | --- | --- |
 | The six general documents: membership record, counting rule, lock, proposal and settlement, commitment, destinations | `spec/` (all files except `declaration-v1.txt` and `index.html`) |
 | How to run your own Crowdlock, and how to make a co-signer key | `spec/running-your-own.md` |
-| Checking a membership signature, and reading a Crowdlock's file | `js/verify.mjs`, `js/crowdlock.mjs` |
-| Accepting a registration or a lock, and deciding whether it counts | `js/append.mjs`, `js/lockrecord.mjs`, `js/inbox.mjs`, `js/relayhealth.mjs` |
-| The lock script, commitments and taproot (taproot is built but not in use) | `lock/` |
-| Making a co-signer key, offline | `cosigner/` |
-| Anchoring the declaration in Bitcoin | `anchor/` |
-| The relay inbox: collecting records from Nostr relays | `relay/` (also copied into every founder's repository) |
+| Checking a membership signature, and reading a Crowdlock's file | `method/js/verify.mjs`, `method/js/crowdlock.mjs` |
+| Accepting a registration or a lock, and deciding whether it counts | `method/js/append.mjs`, `method/js/lockrecord.mjs`, `method/js/inbox.mjs`, `method/js/relayhealth.mjs` |
+| The lock script, commitments and taproot (taproot is built but not in use) | `method/lock/` |
+| Making a co-signer key, offline | `method/cosigner/` |
+| Anchoring the declaration in Bitcoin | `method/anchor/` |
+| The relay inbox: collecting records from Nostr relays | `method/relay/` (copied into every founder's repository as `relay/`) |
 | The licence: code MIT, documents CC BY 4.0 | `LICENSE`, `spec/LICENSE` |
 
 ## 2. The Kop Fund (this instance)
@@ -36,7 +36,7 @@ Values and documents that belong only to The Kop Fund.
 | Its test instance on testnet4, with its own throwaway declaration | `crowdlocks/kop-fund-testnet4.json`, `crowdlocks/test/` |
 | The register: members and locks | `registrations.json` |
 | The destinations list: where money may be sent | `destinations.json` |
-| The relay inbox's own state: which relays are silent, which Crowdlocks were announced | `relay/health.json`, `relay/announced.json`, `relay/VERSION` |
+| The relay inbox's own state: which relays are silent, which Crowdlocks were announced | `method/relay/health.json`, `method/relay/announced.json`, `method/relay/VERSION` |
 
 ## 3. The Kop Fund's website
 
@@ -50,8 +50,9 @@ The public pages at https://jimbus9.github.io/fanfund/, and the services behind 
 | A mock-up of the register, with invented figures | `mock/` |
 | Styling | `style.css` |
 | GitHub Pages setting (stops Pages mangling the files) | `.nojekyll` |
+| Which folders Pages does not publish | `.assetsignore` |
 | The relay inbox's schedule, run by GitHub | `.github/workflows/relay-inbox.yml` |
-| The old join and lock endpoint, being retired | `worker.js`, `wrangler.jsonc`, `DEPLOYING-THE-JOIN-ENDPOINT.md` |
+| The old join and lock endpoint, being retired (worker, not used by the relays) | `worker.js`, `wrangler.jsonc`, `DEPLOYING-THE-JOIN-ENDPOINT.md` |
 
 ## 4. The Crowdlock app
 
@@ -66,11 +67,31 @@ Everything under `app/`, built by `.github/workflows/app.yml`.
 | The inbox copied into every new Crowdlock, packed by a script | `app/template/`, `app/src/template.mjs` (generated; `app/scripts/make-template.mjs`) |
 | Tests against a private test chain | `app/test-chain/` |
 
+## Where things moved (2 November 2026 regroup)
+
+The code moved under `method/` so the four layers are visible from the top. Only the folders listed here moved; The Kop Fund's own files, the pages and `spec/` did not.
+
+| Old path | New path | Public URL changed? |
+| --- | --- | --- |
+| `js/` | `method/js/` | Yes: `.../fanfund/js/...` is now `.../fanfund/method/js/...` |
+| `lock/` | `method/lock/` | Yes (and still not published by Pages) |
+| `cosigner/` | `method/cosigner/` | Yes |
+| `anchor/` | `method/anchor/` | Yes |
+| `relay/` | `method/relay/` | Yes (and still not published by Pages) |
+
+Not moved, so their URLs did not change: `join/`, `crowdlocks/`, `spec/`, `mock/`, `worker.js`, and the founder template's own paths (`relay/`, `js/` in a founder's repository are unchanged).
+
+What might be broken from the move, and where to look:
+
+- Any tool or bookmark that uses an old `js/`, `lock/`, `relay/`, `cosigner/` or `anchor/` path in this repository. Use the table above.
+- Founders' repositories keep the old layout. The app's version and inbox checks try both `relay/` and `method/relay/`, so both kinds of site are recognised.
+- The template is versioned `2026-11-02b` (the inbox code moved). Crowdlocks on the older version show "behind" in the app until they update.
+
 ## Tests
 
 Each part has its own tests. Install a part's dependencies first, with `npm ci` in that folder.
 
-- Method: `js/*.test.mjs`, `lock/*.test.mjs`, `cosigner/cosigner.test.mjs`, `anchor/anchor.test.mjs`, `relay/inbox.test.mjs`
+- Method: `method/js/*.test.mjs`, `method/lock/*.test.mjs`, `method/cosigner/cosigner.test.mjs`, `method/anchor/anchor.test.mjs`, `method/relay/inbox.test.mjs`
 - App: `app/test-chain/*.test.mjs`, and `node app/scripts/make-template.mjs --check`
 
 ## Rules for changes

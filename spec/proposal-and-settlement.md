@@ -59,7 +59,7 @@ so a proposal cannot be replayed into another Crowdlock:
 ```
 
 SHA-256 of that line, UTF-8, NFC normalised, no trailing newline. Built by
-`proposalLine` and `proposalHash` in `lock/commitment.mjs`.
+`proposalLine` and `proposalHash` in `method/lock/commitment.mjs`.
 
 **The fields are fixed in number and order, and "at a minimum" cannot survive
 here.** An optional field is a second possible document, and a second possible

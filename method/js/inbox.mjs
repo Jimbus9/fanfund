@@ -5,8 +5,8 @@
 // endpoint, and posts it to the relays the Crowdlock file names, labelled with
 // the Crowdlock's declaration fingerprint. A scheduled job in the Crowdlock's
 // own repository collects everything so labelled and puts each record through
-// the very same judgement the endpoints use — js/append.mjs for a registration,
-// js/lockrecord.mjs for a lock. Nothing here trusts the relay or the poster:
+// the very same judgement the endpoints use — method/js/append.mjs for a registration,
+// method/js/lockrecord.mjs for a lock. Nothing here trusts the relay or the poster:
 //
 //   * a registration counts only if its Bitcoin signature verifies against the
 //     Crowdlock's own statement, which nobody can fake;

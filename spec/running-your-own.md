@@ -133,7 +133,7 @@ a larger purchase.
 
 Nothing about any one Crowdlock is written into the code. The register page and
 the lock tools read whichever file they are pointed at, so the same software
-serves every instance. `node js/crowdlock.test.mjs` checks every file listed in
+serves every instance. `node method/js/crowdlock.test.mjs` checks every file listed in
 `crowdlocks/index.json`: that it is complete, that its declaration really hashes
 to the fingerprint it claims, and that its register files agree with it.
 
@@ -146,7 +146,7 @@ about it belongs to any one program, so make it whichever way you trust:
 
 - **The Crowdlock app**, under *Make a co-signer key*, with the phone in
   airplane mode.
-- **`cosigner/generate.mjs`** in this repository, on a computer that is
+- **`method/cosigner/generate.mjs`** in this repository, on a computer that is
   offline.
 - **Sparrow or Electrum**: make a new native segwit wallet, write down its
   words, and take the public key of its first receiving address.

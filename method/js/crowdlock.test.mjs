@@ -1,7 +1,7 @@
 // Checks every Crowdlock this site publishes, then proves the checks refuse
 // what they should.
 //
-// Run:  node js/crowdlock.test.mjs      (from the repo root; needs no installs)
+// Run:  node method/js/crowdlock.test.mjs      (from the repo root; needs no installs)
 
 import { readFileSync } from "node:fs";
 import {
@@ -9,7 +9,7 @@ import {
   checkCrowdlock, checkRegisterFiles, checkSeparate, isCosignerOf,
 } from "./crowdlock.mjs";
 
-const root = new URL("../", import.meta.url);
+const root = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), "utf8");
 const json = (p) => JSON.parse(read(p));
 

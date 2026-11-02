@@ -4,7 +4,7 @@
 // that our verifier and the thing producing the signatures share no code. If
 // both agree, the format is right.
 //
-// Run:  node js/verify.test.mjs      (from the repo root)
+// Run:  node method/js/verify.test.mjs      (from the repo root)
 
 import * as bitcoin from "../lock/node_modules/bitcoinjs-lib/src/index.js";
 import { ECPairFactory } from "../lock/node_modules/ecpair/src/index.js";

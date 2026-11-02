@@ -1,7 +1,7 @@
 // Anchor a file to the Bitcoin blockchain.
 //
-//   node anchor/stamp.mjs                      the declaration
-//   node anchor/stamp.mjs ../registrations.json   or any other file
+//   node method/anchor/stamp.mjs                      the declaration
+//   node method/anchor/stamp.mjs ../registrations.json   or any other file
 //
 // WHAT THIS DOES, AND WHAT IT DOES NOT. It puts the file's fingerprint into
 // the blockchain, so the block's timestamp proves a file with exactly these
@@ -53,7 +53,7 @@ process.on("uncaughtException", networkDied);
 process.on("unhandledRejection", networkDied);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const target = resolve(process.argv[2] ?? join(here, "..", "spec", "declaration-v1.txt"));
+const target = resolve(process.argv[2] ?? join(here, "..", "..", "spec", "declaration-v1.txt"));
 const proofPath = `${target}.ots`;
 
 const line = (s = "") => console.log(s);
@@ -80,7 +80,7 @@ if (existsSync(proofPath)) {
   line("stamping again would replace that with today's. If you are sure you");
   line("want a second one, move the old file out of the way first.");
   line();
-  line("To check or finish the existing proof:  node anchor/verify.mjs");
+  line("To check or finish the existing proof:  node method/anchor/verify.mjs");
   line();
   process.exit(1);
 }
@@ -151,7 +151,7 @@ line("calendars rather than at the chain.");
 line();
 line("Tomorrow, run:");
 line();
-line("    node anchor/verify.mjs");
+line("    node method/anchor/verify.mjs");
 line();
 line("which collects the finished proof and tells you which block it landed");
 line("in. After that it stands on its own and needs nobody.");

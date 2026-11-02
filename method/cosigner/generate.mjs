@@ -1,10 +1,10 @@
 // Make the co-signer key. Run this once, on a machine that is already offline.
 //
-//   node cosigner/generate.mjs
+//   node method/cosigner/generate.mjs
 //
 // WHAT THIS KEY IS. It is the fund's half of every lock's purchase exit. It
 // cannot move a single coin on its own — that is proved in
-// lock/library-check/cosigner.mjs against a node enforcing consensus — and it
+// method/lock/library-check/cosigner.mjs against a node enforcing consensus — and it
 // cannot send anybody's money anywhere except where that supporter already
 // signed for it to go. What it can do is refuse, and what it must never do is
 // disappear, because a fund that cannot co-sign can never buy anything.
@@ -122,7 +122,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   line();
   line("  BEFORE YOU TRUST ANY OF THIS, prove the words work:");
   line();
-  line("      node cosigner/restore.mjs");
+  line("      node method/cosigner/restore.mjs");
   line();
   line("  Type the words back in. If it shows the same public key, your");
   line("  paper is a real backup. If it does not, you have found that out");

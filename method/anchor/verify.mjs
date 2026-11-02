@@ -1,7 +1,7 @@
 // Check an anchor, and finish it once the calendars have put it in a block.
 //
-//   node anchor/verify.mjs                     the declaration
-//   node anchor/verify.mjs ../registrations.json
+//   node method/anchor/verify.mjs                     the declaration
+//   node method/anchor/verify.mjs ../registrations.json
 //
 // Two separate questions, and the first is answerable with no internet at all:
 //
@@ -47,7 +47,7 @@ process.on("uncaughtException", networkDied);
 process.on("unhandledRejection", networkDied);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const target = resolve(process.argv[2] ?? join(here, "..", "spec", "declaration-v1.txt"));
+const target = resolve(process.argv[2] ?? join(here, "..", "..", "spec", "declaration-v1.txt"));
 const proofPath = `${target}.ots`;
 
 const line = (s = "") => console.log(s);
@@ -62,7 +62,7 @@ line();
 for (const [what, path] of [["file", target], ["proof", proofPath]]) {
   if (!existsSync(path)) {
     line(`There is no ${what} at ${path}`);
-    if (what === "proof") line("\nRun  node anchor/stamp.mjs  first.\n");
+    if (what === "proof") line("\nRun  node method/anchor/stamp.mjs  first.\n");
     process.exit(1);
   }
 }

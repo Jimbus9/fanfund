@@ -1,6 +1,6 @@
 // Prove the paper works. Run this after generating, and again after wiping.
 //
-//   node cosigner/restore.mjs
+//   node method/cosigner/restore.mjs
 //
 // A backup nobody has ever restored is not a backup; it is a hope. This is
 // the one moment when finding out costs nothing, so it is worth doing twice:

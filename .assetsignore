@@ -21,10 +21,10 @@ CLAUDE.md
 
 # Tests and the lock's development files. The source is public on GitHub,
 # which is where anybody reading the code should read it.
-js/*.test.mjs
-lock/
+method/js/*.test.mjs
+method/lock/
 
 # The phone app and its build setup are source code, not part of the website.
 app/
 .github/
-relay/
+method/relay/

@@ -1,6 +1,6 @@
 // Can the offline co-signing machine actually do its job?
 //
-//   cd lock/library-check && npm install --ignore-scripts && npm run cosigner
+//   cd method/lock/library-check && npm install --ignore-scripts && npm run cosigner
 //
 // The co-signing machine is the one piece of this project that holds a key
 // belonging to the fund rather than to a fan. Before James sits down in front

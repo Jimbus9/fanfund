@@ -1,12 +1,12 @@
 // Posting a signed registration or lock to a Crowdlock's Nostr relays, for its
-// own repository to collect (js/inbox.mjs). Network code only: the record is
+// own repository to collect (method/js/inbox.mjs). Network code only: the record is
 // already signed by the key module, or is pure facts about the chain. Signing
 // the wrapping Nostr event and the relay protocol are nostr-tools', with a
 // throwaway Nostr key each time — the Nostr signature is transport only.
 
 import { finalizeEvent, generateSecretKey } from "nostr-tools/pure";
 import { Relay } from "nostr-tools/relay";
-import { recordEventTemplate, announcementTemplate, announcementFromEvent, ANNOUNCE_KIND, ANNOUNCE_TAG } from "../../js/inbox.mjs";
+import { recordEventTemplate, announcementTemplate, announcementFromEvent, ANNOUNCE_KIND, ANNOUNCE_TAG } from "../../method/js/inbox.mjs";
 
 const TIMEOUT = 12000;
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("no answer")), ms))]);

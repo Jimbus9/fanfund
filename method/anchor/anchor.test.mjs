@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 import OTS from "javascript-opentimestamps";
 
-const R = join(dirname(fileURLToPath(import.meta.url)), "..");
+const R = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 let failures = 0;
 const line = (s = "") => console.log(s);
@@ -55,7 +55,7 @@ const all = proofs();
 if (all.length === 0) {
   line("No anchors yet. Nothing to check, and nothing wrong.");
   line();
-  line("  node anchor/stamp.mjs    to make the first one");
+  line("  node method/anchor/stamp.mjs    to make the first one");
   line();
   process.exit(0);
 }

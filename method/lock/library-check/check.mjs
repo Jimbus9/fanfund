@@ -18,7 +18,7 @@
 // VERDICT: stay on bitcoinjs + descriptors; no switch to BDK.
 //
 //   * The descriptor wsh(and_v(v:pk(owner),or_i(after(t),pk(cosigner)))) gives
-//     byte-for-byte the script in lock/lock.mjs.
+//     byte-for-byte the script in method/lock/lock.mjs.
 //   * Funding and going home are entirely the library's high-level route. Before
 //     the date the node refuses it (non-final); after, it accepts.
 //   * Co-signer alone: the library refuses to build a spend at all.

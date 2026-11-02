@@ -477,7 +477,7 @@ rule();
 
 // The Kop Fund's own file, given this test's co-signer. A second Crowdlock with
 // a different co-signer. The commitment above belongs to the first only.
-const kop = JSON.parse(readFileSync(new URL("../crowdlocks/kop-fund.json", import.meta.url), "utf8"));
+const kop = JSON.parse(readFileSync(new URL("../../crowdlocks/kop-fund.json", import.meta.url), "utf8"));
 const ours = { ...kop, cosigner_keys: [cosignerPubkey.toString("hex")] };
 const theirs = { ...kop, name: "Another Crowdlock", cosigner_keys: [Buffer.from(strangerKey.publicKey).toString("hex")] };
 

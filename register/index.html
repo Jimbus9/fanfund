@@ -90,8 +90,8 @@
     <p>This page is static. It reads one file and checks it in your browser — there is no server deciding what you see. So you can run the identical register yourself, and if your total ever disagrees with ours, ours is wrong.</p>
     <pre>git clone https://github.com/Jimbus9/fanfund
 cd fanfund
-node js/verify.test.mjs     # check the verifier against another library
-node js/crowdlock.test.mjs  # check the Crowdlock files, needs no installs
+node method/js/verify.test.mjs     # check the verifier against another library
+node method/js/crowdlock.test.mjs  # check the Crowdlock files, needs no installs
 python3 -m http.server      # then open localhost:8000/register/</pre>
   </section>
 
@@ -104,8 +104,8 @@ python3 -m http.server      # then open localhost:8000/register/</pre>
 </footer>
 
 <script type="module">
-import { verifyMembership } from "../js/verify.mjs";
-import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../js/crowdlock.mjs";
+import { verifyMembership } from "../method/js/verify.mjs";
+import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../method/js/crowdlock.mjs";
 
 const el = (id) => document.getElementById(id);
 const fmtBtc = (sats) => (sats / 1e8).toFixed(8).replace(/0+$/, "").replace(/\.$/, "") || "0";

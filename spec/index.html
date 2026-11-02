@@ -93,13 +93,13 @@
 cd fanfund
 
 # the verifier, checked against an independent library
-node js/verify.test.mjs
+node method/js/verify.test.mjs
 
 # every Crowdlock's own file, and its declaration's fingerprint
-node js/crowdlock.test.mjs
+node method/js/crowdlock.test.mjs
 
 # the live register — every published signature, checked for real
-node js/register.test.mjs
+node method/js/register.test.mjs
 
 # the lock's construction
 cd lock &amp;&amp; npm install &amp;&amp; node selftest.mjs

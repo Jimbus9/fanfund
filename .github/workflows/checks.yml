@@ -15,8 +15,8 @@ on:
     paths-ignore:
       - "registrations.json"
       - "crowdlocks/test/registrations.json"
-      - "relay/health.json"
-      - "relay/announced.json"
+      - "method/relay/health.json"
+      - "method/relay/announced.json"
   workflow_dispatch:
 
 permissions:
@@ -33,20 +33,20 @@ jobs:
           node-version: 22
 
       # First: several of the site's tests check our code against independent
-      # libraries (bitcoinjs-lib, bitcoinjs-message) installed in lock/.
+      # libraries (bitcoinjs-lib, bitcoinjs-message) installed in method/lock/.
       - name: The lock
-        working-directory: lock
+        working-directory: method/lock
         run: npm ci --no-audit --no-fund && node selftest.mjs && node taproot.test.mjs && node commitment.test.mjs
 
       - name: The site's shared code, pages and live registers
-        run: for t in js/*.test.mjs; do echo "== $t"; node "$t" || exit 1; done
+        run: for t in method/js/*.test.mjs; do echo "== $t"; node "$t" || exit 1; done
 
       - name: The co-signer key script
-        working-directory: cosigner
+        working-directory: method/cosigner
         run: npm ci --no-audit --no-fund && node cosigner.test.mjs
 
       - name: The relay inbox
-        working-directory: relay
+        working-directory: method/relay
         run: npm ci --no-audit --no-fund && node inbox.test.mjs
 
       - name: The app — key module on a private chain, loader, starting a Crowdlock, template up to date

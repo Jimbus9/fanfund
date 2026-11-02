@@ -27,11 +27,11 @@ reply names the pull request route.
 
 ## What it refuses
 
-`js/append.test.mjs` is the real test of what this endpoint will accept, because the judgement
-lives in `js/append.mjs` and the network code around it is deliberately thin.
+`method/js/append.test.mjs` is the real test of what this endpoint will accept, because the judgement
+lives in `method/js/append.mjs` and the network code around it is deliberately thin.
 Nineteen checks, mostly refusals:
 
-    node js/append.test.mjs
+    node method/js/append.test.mjs
 
 A signature for a different declaration, somebody else's signature claimed for
 your address, half a signature, an address already on the register (including
@@ -53,7 +53,7 @@ build settings barely matter.
 build runs `npx wrangler deploy`, which installs wrangler into the build
 folder before publishing — and the publisher then tried to serve its own
 tooling as part of the website, stopping on a 137 MB binary. `.assetsignore`
-is what prevents that. `js/worker.test.mjs` checks it, so the same failure
+is what prevents that. `method/js/worker.test.mjs` checks it, so the same failure
 cannot come back quietly.
 
 This creates a second copy of the site at `kop-fund.<something>.workers.dev`.

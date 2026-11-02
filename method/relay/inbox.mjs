@@ -4,19 +4,33 @@
 //
 // For every Crowdlock file in crowdlocks/ that names relays: collect the
 // records posted for it, put each through the endpoints' own judgement
-// (js/inbox.mjs), and write the register if anything was added. Prints one
+// (method/js/inbox.mjs), and write the register if anything was added. Prints one
 // line per record, so the job's log is a public account of what was taken
 // and what was refused, and why.
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { applyRecords, announcementTemplate, announcementDue } from "../js/inbox.mjs";
 import { membershipStatement, checkCrowdlock } from "../js/crowdlock.mjs";
 import { fetchRecords, postTemplate } from "./nostr.mjs";
 import { recordPass, planSwaps, SILENT_DAYS } from "../js/relayhealth.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// This folder holds the inbox code and its two state files. The repository
+// root is the first folder above it that holds crowdlocks/: the parent of
+// method/relay/ in a founder's repository, and two levels up in this one (the code
+// lives under method/).
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = (() => {
+  let d = HERE;
+  while (!existsSync(join(d, "crowdlocks"))) {
+    const up = dirname(d);
+    if (up === d) throw new Error(`no crowdlocks/ folder above ${HERE}`);
+    d = up;
+  }
+  return d;
+})();
 // Records are looked for over the last 90 days and judged afresh each run, so
 // a lock posted before it confirmed is added once it has, and a job that was
 // asleep for a while catches up.
@@ -26,15 +40,15 @@ const now = Math.floor(Date.now() / 1000);
 const today = new Date().toISOString().slice(0, 10);
 const messages = [];
 // When each Crowdlock's relays last answered, and since when any has been
-// silent: relay/health.json, public like everything else here.
-const HEALTH = join(ROOT, "relay", "health.json");
+// silent: method/relay/health.json, public like everything else here.
+const HEALTH = join(HERE, "health.json");
 let allHealth = {};
 try { allHealth = JSON.parse(readFileSync(HEALTH, "utf8")); } catch {}
 const healthBefore = JSON.stringify(allHealth);
 
-// When each listed Crowdlock was last announced (relay/announced.json), and
+// When each listed Crowdlock was last announced (method/relay/announced.json), and
 // where this repository's site is, so each file's public link can be given.
-const ANNOUNCED = join(ROOT, "relay", "announced.json");
+const ANNOUNCED = join(HERE, "announced.json");
 let announced = {};
 try { announced = JSON.parse(readFileSync(ANNOUNCED, "utf8")); } catch {}
 const announcedBefore = JSON.stringify(announced);
@@ -107,4 +121,4 @@ if (JSON.stringify(allHealth) !== healthBefore) {
 }
 
 // The workflow uses this as the commit message, if anything changed.
-if (messages.length) writeFileSync(join(ROOT, "relay", ".message"), messages.join(", "));
+if (messages.length) writeFileSync(join(HERE, ".message"), messages.join(", "));

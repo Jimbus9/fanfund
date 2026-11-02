@@ -2,7 +2,7 @@
 // looks like afterwards.
 //
 // This is the whole judgement of the lock endpoint, kept apart from the network
-// code around it, exactly as js/append.mjs is for joining. It touches nothing
+// code around it, exactly as method/js/append.mjs is for joining. It touches nothing
 // outside itself — no fetch, no clock — so it can be tested properly. The one
 // fact it needs from the blockchain (how much confirmed money sits at the lock
 // address) is fetched by the caller and passed in.
