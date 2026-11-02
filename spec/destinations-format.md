@@ -85,6 +85,11 @@ I attest destination entry 1 (sha256:<hash of the line>).
 The instance needs no mention here, because the line it hashes already carries
 it.
 
+**This sentence is a protocol constant and must not be translated**, for the
+same reason as the membership statement: a verifier rebuilds it from the entry
+and compares bytes. Only the number and the hash change. See **running your
+own**, "About the language".
+
 Deliberately the same mechanism as a registration, so the verifier already
 written for the register verifies these too. No new cryptography enters the
 project to protect its most sensitive list.
@@ -215,8 +220,9 @@ even if the purchase behind it is a bad idea. Nothing here judges whether a
 purchase is worth making. That is what the absence of commitments is for.
 
 **Routine small spends are the worse target, not the purchase.** Nobody is going
-to wave through a forged proposal for forty million pounds. A plausible invoice
-for a few thousand, arriving when everybody is used to approving such things, is
+to wave through a forged proposal for the price of a football club. A plausible
+invoice for a routine-looking amount, arriving when everybody is used to
+approving such things, is
 the realistic attack — which is why small operating costs are met from a separate
 transparent fund with published receipts, and never from locked money.
 

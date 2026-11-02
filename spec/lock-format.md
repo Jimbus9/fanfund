@@ -75,17 +75,48 @@ in testing because they are exact. An instance uses one or the other for every
 lock, never both: a single transaction cannot spend a date lock and a height
 lock together.
 
+### Rounding, and why it is UTC
+
+A client turns a chosen length into a locktime by adding it to the current time
+and then, **for any length of a day or more, rounding up to the next midnight
+UTC**. Shorter lengths, which exist only on test networks, are not rounded.
+
+**A year is 365.25 days exactly** — 31,557,600 seconds. That is not a detail of
+one implementation; it is part of the format, because the locktime goes into the
+address. A client using 365 days would derive a different address for the same
+supporter making the same choice on the same day, and their money would land
+somewhere the register is not watching.
+
+**UTC, not the supporter's own midnight.** Two consequences follow, and a
+client that rounds to local midnight gets both wrong. First, a lock's address
+is derived from its locktime, so the same supporter choosing the same length on
+the same day must land on the same address wherever they are standing — a
+client in Sydney and a client in Liverpool have to agree. Second, two locks by
+one member that round to the same date *are the same address*, and money sent
+to the second simply joins the first; that is intended, and it only holds if
+everybody rounds identically.
+
+Rounding at all is what keeps the register readable: without it, expiry dates
+scatter across every minute of the day and no two supporters' locks ever share
+one.
+
 A spend down the going-home branch must set the transaction's `nLockTime` to
 the lock's locktime, and `nSequence` below `0xffffffff` so that `nLockTime` is
 honoured.
 
 ## Offered lengths
 
-**One, three or five years**, chosen by the supporter at the moment of locking.
+**A short list of fixed lengths, chosen by the supporter at the moment of
+locking.** The list is the instance's own, published as `lock_lengths_years` in
+its Crowdlock file — The Kop Fund offers **one, three or five years**; a test
+copy offers fractions of a year, so that expiry can be watched happening.
 
 Fixed options rather than free choice: free choice scatters expiry dates across
 a register nobody can read at a glance, and the point of the register is that
-it can be read.
+it can be read. **What is general here is "a few fixed options", not the
+particular three.** An instance with a nearer goal may sensibly offer shorter
+ones, as long as it is honest that a shorter lock counts for less and must be
+renewed more often.
 
 **Length is a genuine trade, in both directions.** A longer lock counts for more
 and signals more. It also extends the period during which an outstanding

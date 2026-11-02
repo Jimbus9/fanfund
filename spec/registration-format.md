@@ -32,6 +32,17 @@ title, version and fingerprint taken from its file in `crowdlocks/`:
 I agree to the <title> v<version> (sha256:<fingerprint>) and join as a member.
 ```
 
+**The English is a protocol constant and must not be translated.** The three
+angle-bracketed parts are yours; everything around them is fixed, in English,
+for every instance in every language. A verifier rebuilds this sentence from
+the Crowdlock file and compares bytes, so a translated statement makes every
+signature in that register unverifiable. Show a translation beside it if your
+members need one — sign the constant. See **running your own**, "About the
+language".
+
+```
+```
+
 One line, no wrapping, no trailing whitespace. The fingerprint is the SHA-256
 of the canonical declaration text — see `declaration-v1.txt` and the
 canonicalisation rules below. Signing a statement that carries the fingerprint
@@ -71,7 +82,12 @@ still counts as membership, but cannot be tied to a lock. Use `bc1q`.
 
 ## Address types
 
-| Type | Prefix | Accepted |
+The prefixes below are mainnet's. A test network uses its own — `tb1q` on
+testnet, `bcrt1q` on regtest — and the verifier derives whichever belongs to the
+network the Crowdlock names. It is the *type* that is accepted or refused, never
+the prefix.
+
+| Type | Prefix (mainnet) | Accepted |
 | --- | --- | --- |
 | Native segwit v0 (P2WPKH) | `bc1q` | **Yes — the only kind accepted today** |
 | Legacy (P2PKH) | `1` | Not yet |
@@ -147,9 +163,14 @@ added, numbered, and removed *before* real members arrive would silently consume
 numbers that belong to people. Test registrations live in the test suite, against
 throwaway keys, and never in `registrations.json`.
 
-The same goes for anything on a test network. Testnet coins, testnet keys and
-testnet locks are worthless by design and have no relationship to membership. The
-register records mainnet signatures over the declaration and nothing else.
+The same goes for anything on a test network. Test coins, test keys and test
+locks are worthless by design and have no relationship to membership. **A
+register records signatures on the network its own Crowdlock names, and nothing
+else** — that is `mainnet` for any instance holding real money, and the two must
+never mix. An instance's test copy has its own declaration, its own fingerprint
+and its own register, so a test signature is not merely uncounted: it is a
+signature over a different document, and the verifier derives the address using
+that network's own prefix.
 
 ## Versioning
 

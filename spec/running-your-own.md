@@ -62,8 +62,11 @@ become somebody's business.
 
 Said plainly, so that nobody adopts it for the wrong job:
 
-- **Small amounts.** On-chain fees and on-ramp costs make commitments under a
-  couple of hundred pounds poor value. It cannot do a tenner.
+- **Small amounts.** On-chain fees and on-ramp costs make small commitments poor
+  value — somewhere around a couple of hundred pounds, dollars or euros is where
+  it starts to make sense, and it cannot sensibly do a tenner. The threshold is
+  set by the fee market, not by us, so check it against the fees of the day
+  rather than trusting this sentence.
 - **Speed.** A proposal takes weeks by design and settlement is paced across
   days. It cannot react to an opportunity that closes on Friday.
 - **Vague goals.** It needs an identifiable seller, a price, and an address that
@@ -252,9 +255,39 @@ instance that wrote them is about football. If you are buying a woodland, change
 every word of that — it is tone, not mechanism. Nothing in the behaviour depends
 on it.
 
-Two places where the words matter more than style:
+**But two sentences are machinery wearing the clothes of prose, and translating
+them breaks your Crowdlock.** Both are strings that get *signed*, and a
+signature is only checkable because the verifier can rebuild the exact bytes
+that were signed:
 
-- The **declaration** is signed, so its words are the thing people agreed to.
+```
+I agree to the <title> v<version> (sha256:<fingerprint>) and join as a member.
+I attest destination entry <n> (sha256:<hash of the line>).
+```
+
+**Leave both exactly as they are, in English, whatever language your instance
+speaks.** The parts that are yours are already inside them — your declaration's
+title, its version, its fingerprint. The English around those is a protocol
+constant, like the `|` between fields or the `sha256:` prefix, and it is no more
+translatable than they are. Translate the first sentence and every member's
+signature stops verifying; translate the second and your destinations list can
+no longer be shown to be attested.
+
+This is an uncomfortable rule and it is worth being straight about why it
+stands. A signed statement has to be reproducible byte for byte by anyone
+checking it, years later, from the published files alone. A translation is a
+second possible set of bytes, and once two exist the verifier has to guess —
+the same reason the proposal line has fixed fields in a fixed order. There is
+nothing stopping you *displaying* a translation beside it, and you should: show
+people what they are signing in their own language, and sign the constant.
+
+Three places where the words matter more than style:
+
+- **The two statements above.** Not style at all. Do not touch them.
+
+- The **declaration** is signed too, but differently: its *fingerprint* is what
+  goes into the statement, so its words are entirely yours. Write them in any
+  language. They are the thing people agreed to.
   Write it as though it will be quoted back at you in ten years, because it will.
 - The **principles the other documents refer to by number** are your
   declaration's, not ours. If you renumber, check the references.
