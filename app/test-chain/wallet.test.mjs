@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, NETWORKS, DUST_SATS,
-  signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock, newCosignerWords, cosignerKeyFromWords,
+  signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock, newCosignerWords, cosignerKeyFromWords, suggestWords,
 } from "../src/wallet/core.mjs";
 import { lockAddress } from "../../js/lockrecord.mjs";
 import { verifyMembership } from "../../js/verify.mjs";
@@ -75,6 +75,8 @@ check("The standard test words give the standard co-signer key (same as cosigner
   cosignerKeyFromWords(vector).publicKey === "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c");
 const coWords = newCosignerWords();
 check("A new co-signer key has its own 24 words", coWords.split(" ").length === 24 && wordsAreValid(coWords) && coWords !== words);
+check("Checking a paper copy offers standard words for what's typed, never the answer itself",
+  suggestWords("aban").includes("abandon") && suggestWords("").length === 0 && suggestWords("zzz").length === 0 && suggestWords("a").length === 4);
 check("The same words always give the same key, typed messily or not",
   cosignerKeyFromWords(`  ${coWords.toUpperCase()} `).publicKey === cosignerKeyFromWords(coWords).publicKey);
 // The standard slot is shared with an ordinary wallet's first address, so the

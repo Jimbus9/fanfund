@@ -62,6 +62,13 @@ export function tidyWords(text) {
   return String(text ?? "").trim().toLowerCase().split(/\s+/).join(" ");
 }
 
+/** Up to `n` standard backup words starting with what has been typed, to help checking a paper copy. */
+export function suggestWords(prefix, n = 4) {
+  const p = String(prefix ?? "").trim().toLowerCase();
+  if (!p) return [];
+  return wordlist.filter((w) => w.startsWith(p)).slice(0, n);
+}
+
 /** Are these valid backup words? Checks the words and their built-in checksum. */
 export function wordsAreValid(text) {
   return validateMnemonic(tidyWords(text), wordlist);

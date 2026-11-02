@@ -25,7 +25,7 @@ import * as Clipboard from "expo-clipboard";
 import QRCode from "react-native-qrcode-svg";
 // @ts-ignore — plain module shared with the chain tests
 import {
-  newWords, wordsAreValid, tidyWords, accountFromWords, waitingBalance, buildSend, signStatement,
+  newWords, wordsAreValid, tidyWords, accountFromWords, suggestWords, waitingBalance, buildSend, signStatement,
   lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords, newCosignerWords, cosignerKeyFromWords, COSIGNER_PATH,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain modules shared with the tests
@@ -160,40 +160,48 @@ function ShowWords({ words, go }: { words: string; go: Go }) {
 }
 
 function CheckWords({ words, go }: { words: string; go: Go }) {
+  return (
+    <CheckEveryWord
+      words={words}
+      onDone={async () => { await saveWords(words); go({ name: "home", words }); }}
+      onShowAgain={() => go({ name: "showWords", words })}
+    />
+  );
+}
+
+/**
+ * Check a paper copy of backup words, every word, one at a time — the way a
+ * hardware wallet does. A copy wrong in a single word is not a backup, and
+ * checking only a few words leaves most of them unchecked. Suggestions come
+ * from the standard word list, never from the words themselves.
+ */
+function CheckEveryWord({ words, onDone, onShowAgain }: { words: string; onDone: () => void; onShowAgain: () => void }) {
   const list = words.split(" ");
-  // Three different positions, chosen once.
-  const asks = useMemo(() => {
-    const picks = new Set<number>();
-    while (picks.size < 3) picks.add(Math.floor(Math.random() * 12));
-    return [...picks].sort((a, b) => a - b);
-  }, [words]);
-  const [answers, setAnswers] = useState<string[]>(["", "", ""]);
+  const [i, setI] = useState(0);
+  const [typed, setTyped] = useState("");
   const [wrong, setWrong] = useState(false);
-
-  const finish = async () => {
-    const ok = asks.every((pos, i) => answers[i].trim().toLowerCase() === list[pos]);
-    if (!ok) { setWrong(true); return; }
-    await saveWords(words);
-    go({ name: "home", words });
+  const accept = (w: string) => {
+    if (w.trim().toLowerCase() !== list[i]) { setWrong(true); return; }
+    setWrong(false); setTyped("");
+    if (i + 1 === list.length) onDone(); else setI(i + 1);
   };
-
   return (
     <View>
       <Text style={s.h1}>Check your paper</Text>
-      <Text style={s.p}>Type these words from what you wrote down.</Text>
-      {asks.map((pos, i) => (
-        <View key={pos}>
-          <Text style={s.label}>Word {pos + 1}</Text>
-          <TextInput
-            style={s.input} autoCapitalize="none" autoCorrect={false}
-            value={answers[i]}
-            onChangeText={(t) => { const a = [...answers]; a[i] = t; setAnswers(a); setWrong(false); }}
-          />
-        </View>
-      ))}
-      {wrong && <Text style={s.error}>That does not match. Check your paper — if a word is wrong there, go back and write them out again.</Text>}
-      <Button label="Done" onPress={finish} />
-      <Button label="Show the words again" kind="plain" onPress={() => go({ name: "showWords", words })} />
+      <Text style={s.p}>Type each word from what you wrote down. Every word is checked — one wrong word and the paper wouldn't bring your money back.</Text>
+      <Text style={s.label}>Word {i + 1} of {list.length}</Text>
+      <TextInput
+        style={s.input} autoCapitalize="none" autoCorrect={false} autoFocus value={typed}
+        onChangeText={(t) => { setTyped(t); setWrong(false); }} onSubmitEditing={() => accept(typed)} returnKeyType="next"
+      />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+        {suggestWords(typed).map((w: string) => (
+          <Pressable key={w} onPress={() => accept(w)} style={s.chip}><Text style={s.chipText}>{w}</Text></Pressable>
+        ))}
+      </View>
+      {wrong && <Text style={s.error}>That isn't word {i + 1}. Check your paper — if it's wrong there, go back and copy the words out again.</Text>}
+      <Button label="Next" disabled={!typed.trim()} onPress={() => accept(typed)} />
+      <Button label="Show the words again" kind="plain" onPress={onShowAgain} />
     </View>
   );
 }
@@ -848,16 +856,10 @@ function AddCrowdlock({ words, go, link: given }: { words: string; go: Go; link?
 function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
   const [stage, setStage] = useState<"intro" | "show" | "check" | "result" | "existing">("intro");
   const [coWords, setCoWords] = useState("");
-  const [answers, setAnswers] = useState(["", "", ""]);
   const [typed, setTyped] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [pub, setPub] = useState<string | null>(null);
   const list = coWords.split(" ");
-  const asks = useMemo(() => {
-    const picks = new Set<number>();
-    while (picks.size < 3) picks.add(Math.floor(Math.random() * 24));
-    return [...picks].sort((a, b) => a - b);
-  }, [coWords]);
   // Leave this screen and the words are gone from memory with it.
   const leave = () => { setCoWords(""); setTyped(""); setPub(null); go({ name: "home", words: walletWords }); };
 
@@ -882,28 +884,16 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
         {list.map((w, i) => <Text key={i} style={s.word}><Text style={s.wordNum}>{i + 1}. </Text>{w}</Text>)}
       </View>
       <Text style={s.note}>No screenshots, notes, email or cloud. Once you leave this screen, these words are gone from the phone.</Text>
-      <Button label="I've written them down twice" onPress={() => { setAnswers(["", "", ""]); setStage("check"); }} />
+      <Button label="I've written them down twice" onPress={() => setStage("check")} />
     </View>
   );
 
   if (stage === "check") return (
-    <View>
-      <Text style={s.h1}>Check your paper</Text>
-      <Text style={s.p}>Type these words from what you wrote.</Text>
-      {asks.map((pos, i) => (
-        <View key={pos}>
-          <Text style={s.label}>Word {pos + 1}</Text>
-          <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={answers[i]}
-            onChangeText={(t) => { const a = [...answers]; a[i] = t; setAnswers(a); setProblem(null); }} />
-        </View>
-      ))}
-      {problem && <Text style={s.error}>{problem}</Text>}
-      <Button label="Done" onPress={() => {
-        if (!asks.every((pos, i) => answers[i].trim().toLowerCase() === list[pos])) { setProblem("That doesn't match. Check your paper — if a word is wrong there, go back and copy it again."); return; }
-        setPub(cosignerKeyFromWords(coWords).publicKey); setCoWords(""); setStage("result");
-      }} />
-      <Button label="Show the words again" kind="plain" onPress={() => setStage("show")} />
-    </View>
+    <CheckEveryWord
+      words={coWords}
+      onDone={() => { setPub(cosignerKeyFromWords(coWords).publicKey); setCoWords(""); setStage("result"); }}
+      onShowAgain={() => setStage("show")}
+    />
   );
 
   if (stage === "existing") return (
@@ -924,11 +914,11 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
   return (
     <View>
       <Text style={s.h1}>The public half</Text>
-      <Text style={s.p}>This is safe to share. It goes in the Crowdlock's file as its co-signer key. Scan it rather than typing it — a wrong key makes every lock built from it unable to go into a purchase.</Text>
+      <Text style={s.p}>This is safe to share. It goes in the Crowdlock's file as its co-signer key. Copy it, or scan it from another device — never retype it by hand: one wrong character makes every lock built from it unable to go into a purchase.</Text>
       <View style={s.qr}><QRCode value={pub ?? ""} size={220} /></View>
       <Text style={s.mono} selectable>{pub}</Text>
       <Text style={s.note}>Check what's scanned starts {pub?.slice(0, 6)} and ends {pub?.slice(-6)}.</Text>
-      <Button label="Copy it" kind="plain" onPress={() => pub && Clipboard.setStringAsync(pub)} />
+      <Button label="Copy it" onPress={() => pub && Clipboard.setStringAsync(pub)} />
       <Text style={s.note}>You can switch airplane mode off now. Keep the two paper copies apart.</Text>
       <Button label="Done" onPress={leave} />
     </View>
