@@ -21,13 +21,48 @@ function withTimeout(fetchImpl, ms) {
   };
 }
 
-export function esploraChain(baseUrl, rawFetch = globalThis.fetch, timeoutMs = TIMEOUT_MS) {
+// Free explorers turn away anyone who asks too much too fast (HTTP 429). A
+// Crowdlock page asks a lot at once, so three things keep the app under the
+// limit: the same question asked within a short while gets the answer already
+// in hand (and one already on its way is waited for, not asked twice); a
+// "too many" is waited out and tried again; and if it still fails, the fan is
+// told plainly what's going on.
+export const REMEMBER_MS = 20000;
+export const RETRIES = 2;
+export const BUSY = "the block explorer is busy — wait a minute and tap Refresh";
+// One memory per way of fetching, so every screen shares it but tests don't.
+const memories = new WeakMap();
+const busy = (status) => status === 429 || status === 503;
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export function esploraChain(baseUrl, rawFetch = globalThis.fetch, timeoutMs = TIMEOUT_MS,
+  { rememberMs = REMEMBER_MS, retries = RETRIES, wait = pause } = {}) {
   const fetchImpl = withTimeout(rawFetch, timeoutMs);
-  const get = async (path, as = "json") => {
-    const res = await fetchImpl(`${baseUrl}${path}`);
-    if (!res.ok) throw new Error(`the block explorer answered ${res.status}`);
-    return as === "json" ? res.json() : res.text();
+  if (!memories.has(rawFetch)) memories.set(rawFetch, new Map());
+  const memory = memories.get(rawFetch);
+  const ask = async (url, as) => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetchImpl(url);
+      if (res.ok) return as === "json" ? res.json() : res.text();
+      if (!busy(res.status)) throw new Error(`the block explorer answered ${res.status}`);
+      if (attempt >= retries) throw new Error(BUSY);
+      // Honour the explorer's own "try again in N seconds", within reason.
+      const said = Number(res.headers?.get?.("retry-after"));
+      await wait(Number.isFinite(said) && said > 0 ? Math.min(said, 10) * 1000 : 2000 * (attempt + 1));
+    }
   };
+  const get = (path, as = "json") => {
+    const url = `${baseUrl}${path}`;
+    const key = `${as} ${url}`;
+    const held = memory.get(key);
+    if (held && Date.now() - held.at < rememberMs) return held.answer;
+    const answer = ask(url, as);
+    memory.set(key, { at: Date.now(), answer });
+    answer.catch(() => { if (memory.get(key)?.answer === answer) memory.delete(key); });
+    return answer;
+  };
+  // Anything sent changes what the chain will say, so forget what it said.
+  const forget = () => { for (const k of [...memory.keys()]) if (k.includes(baseUrl)) memory.delete(k); };
   return {
     async utxos(address) {
       const list = await get(`/address/${address}/utxo`);
@@ -55,7 +90,9 @@ export function esploraChain(baseUrl, rawFetch = globalThis.fetch, timeoutMs = T
     },
     async broadcast(hex) {
       const res = await fetchImpl(`${baseUrl}/tx`, { method: "POST", body: hex });
+      forget();
       const text = await res.text();
+      if (busy(res.status)) throw new Error(`${BUSY} — nothing was sent`);
       if (!res.ok) throw new Error(`the network refused it: ${text.slice(0, 160)}`);
       return text.trim(); // the txid
     },

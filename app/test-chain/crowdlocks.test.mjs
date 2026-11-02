@@ -154,6 +154,37 @@ let unreachable = null;
 try { await esploraChain("https://x", async () => { throw new TypeError("Network request failed"); }, 50).utxos("tb1qme"); } catch (e) { unreachable = e.message; }
 check("One that can't be reached says so too", /couldn't reach/.test(unreachable ?? ""));
 
+// An explorer that says "too many requests": wait, try again, and if it never
+// relents, say so plainly. And don't ask the same thing twice in quick succession.
+const noWait = { wait: async () => {} };
+let calls = 0;
+const busyOnce = async () => (++calls === 1 ? new Response("slow down", { status: 429 }) : Response.json([]));
+const after = await esploraChain("https://x", busyOnce, 50, noWait).utxos("tb1qme");
+check("A 'too many requests' is waited out and asked again", Array.isArray(after) && calls === 2, `${calls} calls`);
+let waitedFor = null;
+const busyAlways = async () => new Response("slow down", { status: 429, headers: { "retry-after": "3" } });
+let busyMsg = null;
+try { await esploraChain("https://x", busyAlways, 50, { wait: async (ms) => { waitedFor = ms; } }).utxos("tb1qme"); } catch (e) { busyMsg = e.message; }
+check("If it never relents, the fan is told it's busy, in plain words", /busy — wait a minute and tap Refresh/.test(busyMsg ?? ""), busyMsg ?? "NO ERROR");
+check("The explorer's own 'try again in' is honoured", waitedFor === 3000, String(waitedFor));
+calls = 0;
+const counting = async () => { calls++; return Response.json([]); };
+const c1 = esploraChain("https://x", counting, 50), c2 = esploraChain("https://x", counting, 50);
+await Promise.all([c1.utxos("tb1qa"), c1.utxos("tb1qa"), c2.utxos("tb1qa")]);
+check("The same question asked several times at once goes to the explorer once", calls === 1, `${calls} calls`);
+await c1.utxos("tb1qb");
+check("A different question is still asked", calls === 2, `${calls} calls`);
+await c1.broadcast("00");
+calls = 0;
+await c2.utxos("tb1qa");
+check("After sending, answers already in hand are forgotten", calls === 1, `${calls} calls`);
+calls = 0;
+const flaky = async () => (++calls === 1 ? new Response("no", { status: 500 }) : Response.json([]));
+const fc = esploraChain("https://x", flaky, 50);
+try { await fc.utxos("tb1qa"); } catch {}
+await fc.utxos("tb1qa");
+check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
+
 // Sharing
 const kopUrl = `${SITE}crowdlocks/kop-fund.json`;
 const app = openLinkFor(kopUrl);
