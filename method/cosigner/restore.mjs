@@ -19,7 +19,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { pubkeyFromWords, PATH } from "./generate.mjs";
+import { pubkeyFromWords, xpubFromWords, PATH } from "./generate.mjs";
 
 const line = (s = "") => console.log(s);
 const rule = () => line("=".repeat(74));
@@ -58,6 +58,7 @@ try {
 line();
 line(`  Path    ${PATH}`);
 line(`  Key     ${pubkey}`);
+line(`  Xpub    ${xpubFromWords(typed)}`);
 line();
 
 const expectedPath = new URL("./cosigner-pubkey.txt", import.meta.url);

@@ -9,7 +9,7 @@
 // the same key. Everything else about the co-signer rests on that, because
 // the paper is the backup and the paper is only words.
 
-import { pubkeyFromWords, PATH } from "./generate.mjs";
+import { pubkeyFromWords, xpubFromWords, PATH, ACCOUNT_PATH } from "./generate.mjs";
 
 let failures = 0;
 const check = (what, ok, detail = "") => {
@@ -37,6 +37,13 @@ check("A known recovery phrase gives a key", /^0[23][0-9a-f]{64}$/.test(key), ke
 check("…the same one, every time", pubkeyFromWords(KNOWN) === key);
 check("…compressed, 33 bytes, as the lock requires", key.length === 66);
 check("…at the standard path, so any wallet can restore it", PATH === "m/84'/0'/0'/0/0", PATH);
+
+// BIP84's own published example: these words, this account xpub, this first key.
+const BIP84 = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+check("The xpub is BIP84's published account key for its example words",
+  xpubFromWords(BIP84) === "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V" && ACCOUNT_PATH === "m/84'/0'/0'");
+check("…and its first key is the co-signer key the same words make",
+  pubkeyFromWords(BIP84) === "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c");
 
 // The things somebody will actually do wrong when typing words off paper.
 check("Extra spaces and line breaks are forgiven",

@@ -22,6 +22,7 @@
 import { checkCrowdlock, checkRegisterFiles, membershipStatement } from "../../method/js/crowdlock.mjs";
 import { esploraChain } from "./wallet/esplora.mjs";
 import { earlyReleases } from "../../method/js/release.mjs";
+import { checkCosignerXpubs } from "./wallet/core.mjs";
 
 // This build's starting list and counting-rule link live in ./build.mjs, the
 // one file that differs between builds of the app.
@@ -78,6 +79,9 @@ export async function loadCrowdlock(url, fetchImpl = globalThis.fetch) {
   catch (e) { return fail(`could not load its declaration: ${e.message}`); }
 
   const fileCheck = checkCrowdlock(crowdlock, { declarationText });
+  // An xpub that doesn't stand for one of its co-signer keys would have a
+  // hardware wallet build a lock the register never counts.
+  if (fileCheck.ok) { const xc = checkCosignerXpubs(crowdlock); if (!xc.ok) return fail(...xc.problems); }
   if (!fileCheck.ok) return fail(...fileCheck.problems);
 
   let registrations, destinations;

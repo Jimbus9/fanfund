@@ -43,6 +43,21 @@ export function pubkeyFromWords(words) {
   return Buffer.from(key.publicKey).toString("hex");
 }
 
+/**
+ * The same key as an xpub: the account at m/84'/0'/0', whose first key
+ * (/0/0) is the co-signer key above. Hardware wallets need it in this form to
+ * recognise a lock — a Ledger will not sign for a plain key. It is public, like
+ * the key, and goes in the Crowdlock's file beside it (cosigner_xpubs).
+ */
+export const ACCOUNT_PATH = "m/84'/0'/0'";
+export function xpubFromWords(words) {
+  const mnemonic = words.trim().toLowerCase().split(/\s+/).join(" ");
+  if (!bip39.validateMnemonic(mnemonic, wordlist)) {
+    throw new Error("those words are not a valid recovery phrase — check the spelling and the order");
+  }
+  return HDKey.fromMasterSeed(bip39.mnemonicToSeedSync(mnemonic)).derive(ACCOUNT_PATH).publicExtendedKey;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const line = (s = "") => console.log(s);
   // The label printed on the paper: name the Crowdlock the key is for, e.g.
@@ -58,6 +73,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const mnemonic = bip39.generateMnemonic(wordlist, 128);
   const words = mnemonic.split(" ");
   const pubkey = pubkeyFromWords(mnemonic);
+  const xpub = xpubFromWords(mnemonic);
 
   line();
   rule();
@@ -108,11 +124,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   line();
   line(`  Check what your phone read starts ${pubkey.slice(0, 6)} and ends ${pubkey.slice(-6)}.`);
   line();
+  line("  AND ITS XPUB — also public. It goes in the Crowdlock's file beside the");
+  line("  key (cosigner_xpubs), so members with a hardware wallet can lock:");
+  line();
+  line(`      ${xpub}`);
+  line();
 
   // Only the public half touches the disk. It has to leave on a USB stick,
   // and retyping 66 characters by hand is how a wrong key reaches the site.
   const out = new URL("./cosigner-pubkey.txt", import.meta.url);
   writeFileSync(out, `${pubkey}\n`);
+  writeFileSync(new URL("./cosigner-xpub.txt", import.meta.url), `${xpub}\n`);
   line("  Also saved to cosigner-pubkey.txt, if you would rather use a USB");
   line("  stick than a phone. Nothing secret is in that file — but a stick");
   line("  that has been in an online machine is the one thing that can carry");

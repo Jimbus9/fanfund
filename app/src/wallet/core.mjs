@@ -32,6 +32,7 @@ import { generateMnemonic, validateMnemonic, mnemonicToSeedSync } from "@scure/b
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { BIP32, Output, Psbt, signers, networks, keyExpressionBIP32 } from "@bitcoinerlab/descriptors";
 import * as ecc from "@bitcoinerlab/secp256k1";
+import bs58check from "bs58check";
 // The register's own verifier, shared with the website: the message hash a
 // signature is made over is computed by exactly the code that later checks it.
 import { messageHash } from "../../../method/js/verify.mjs";
@@ -125,8 +126,9 @@ export function cosignerFromWords(text, network = "mainnet") {
   if (!wordsAreValid(words)) throw new Error("those are not valid backup words");
   const { network: net, coin } = typeof network === "string" ? NETWORKS[network] : network;
   const root = BIP32.fromSeed(mnemonicToSeedSync(words), net);
-  const path = `m/84'/${coin}'/7713'/0/0`;
-  return { path, publicKey: toHex(root.derivePath(path).publicKey) };
+  const account = `m/84'/${coin}'/7713'`;
+  const path = `${account}/0/0`;
+  return { path, publicKey: toHex(root.derivePath(path).publicKey), xpub: root.derivePath(account).neutered().toBase58() };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +159,75 @@ export function cosignerKeyFromWords(text) {
   const words = tidyWords(text);
   if (!wordsAreValid(words)) throw new Error("those are not valid backup words — check the spelling and the order");
   const root = BIP32.fromSeed(mnemonicToSeedSync(words), networks.bitcoin);
-  return { path: COSIGNER_PATH, publicKey: toHex(root.derivePath(COSIGNER_PATH).publicKey) };
+  return {
+    path: COSIGNER_PATH,
+    publicKey: toHex(root.derivePath(COSIGNER_PATH).publicKey),
+    xpub: root.derivePath(COSIGNER_ACCOUNT_PATH).neutered().toBase58(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Co-signer xpubs
+//
+// A hardware wallet will only sign for a lock whose keys it is given as
+// xpubs: it works the plain key out itself. So a co-signer may publish the
+// account xpub whose first key (/0/0) is their co-signer key, and the lock is
+// byte-for-byte the same — the xpub only lets the device recognise it.
+// ---------------------------------------------------------------------------
+
+/** The account a co-signer key made the standard way sits under. */
+export const COSIGNER_ACCOUNT_PATH = "m/84'/0'/0'";
+
+/** Read an xpub (Bitcoin) or tpub (test networks); null if it is neither. */
+export function readXpub(text) {
+  const t = String(text ?? "").trim();
+  for (const net of [networks.bitcoin, networks.testnet]) {
+    try { return { node: BIP32.fromBase58(t, net), network: net }; } catch {}
+  }
+  return null;
+}
+
+/** The co-signer key an xpub stands for: its first key, /0/0. Null if it isn't an xpub. */
+export function keyFromXpub(text) {
+  const x = readXpub(text);
+  if (!x || x.node.isPrivate?.() || x.node.privateKey) return null;
+  return toHex(x.node.derive(0).derive(0).publicKey);
+}
+
+/**
+ * The same xpub, written for the network a device expects (xpub or tpub).
+ * Only the four version bytes change; the key, chain code, depth and parent
+ * are exactly as the co-signer published them.
+ */
+export function xpubForNetwork(text, network) {
+  const x = readXpub(text);
+  if (!x) throw new Error("that is not an xpub");
+  const net = typeof network === "string" ? NETWORKS[network].network : network;
+  const raw = Uint8Array.from(bs58check.decode(String(text).trim()));
+  new DataView(raw.buffer).setUint32(0, net.bip32.public);
+  return bs58check.encode(raw);
+}
+
+/**
+ * Every xpub in a Crowdlock file must stand for one of its co-signer keys, or
+ * a hardware wallet would build a lock the register never counts. Returns
+ * { ok, problems }.
+ */
+export function checkCosignerXpubs(c) {
+  const problems = [];
+  const keys = new Set((c?.cosigner_keys ?? []).map((k) => String(k).toLowerCase()));
+  (c?.cosigner_xpubs ?? []).forEach((x, i) => {
+    const k = keyFromXpub(x);
+    if (!k) problems.push(`cosigner_xpubs[${i}] is not a public xpub`);
+    else if (!keys.has(k)) problems.push(`cosigner_xpubs[${i}] stands for ${k.slice(0, 10)}…, which is not one of this Crowdlock's co-signer keys`);
+  });
+  return { ok: problems.length === 0, problems };
+}
+
+/** The xpub, if published, for a co-signer key. */
+export function xpubForKey(c, key) {
+  const k = String(key ?? "").toLowerCase();
+  return (c?.cosigner_xpubs ?? []).find((x) => keyFromXpub(x) === k) ?? null;
 }
 
 // ---------------------------------------------------------------------------

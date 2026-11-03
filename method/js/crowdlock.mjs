@@ -15,6 +15,8 @@ import { sha256 } from "./vendor/noble-hashes/sha256.js";
 
 const HASH = /^[0-9a-f]{64}$/;
 const PUBKEY = /^0[23][0-9a-f]{64}$/; // compressed only, as the lock format requires
+// A BIP32 extended public key: xpub on Bitcoin, tpub on its test networks.
+const XPUB = /^[xt]pub[1-9A-HJ-NP-Za-km-z]{107}$/;
 const NETWORKS = ["mainnet", "testnet4", "signet", "regtest"];
 
 const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -93,6 +95,22 @@ export function checkCrowdlock(c, { declarationText } = {}) {
     const cos = new Set(c.cosigner_keys.map((x) => x.slice(2)));
     need(!c.attestor_keys.some((x) => cos.has(x.slice(2))),
       "a key is both co-signer and attestor — the key that approves a destination must never be a key that spends to it");
+  }
+
+  // Optional. Each co-signer key's xpub — the account (m/84'/0'/0' for a key
+  // made the standard way) whose first key, /0/0, is that co-signer key.
+  // Hardware wallets need it: a Ledger will only sign for a lock whose keys it
+  // is given as xpubs, then works out the plain key itself. Only its form is
+  // checked here; that it really makes a listed key is checked by the app and
+  // the repository's tests, which have the arithmetic for it.
+  if (c.cosigner_xpubs !== undefined) {
+    const xs = c.cosigner_xpubs;
+    need(Array.isArray(xs), "cosigner_xpubs must be a list of xpubs");
+    if (Array.isArray(xs)) {
+      xs.forEach((x, i) => need(XPUB.test(x), `cosigner_xpubs[${i}] is not an xpub`));
+      need(new Set(xs).size === xs.length, "cosigner_xpubs lists the same xpub twice");
+      need(xs.length <= (c.cosigner_keys?.length ?? 0), "cosigner_xpubs has more xpubs than there are co-signer keys");
+    }
   }
 
   need(posInt(c.attestor_threshold), "attestor_threshold must be a whole number from 1");

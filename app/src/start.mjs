@@ -19,7 +19,7 @@
 
 import { canonicalise, declarationHash, membershipStatement, checkCrowdlock, checkRegisterFiles, checkSeparate } from "../../method/js/crowdlock.mjs";
 import template from "./template.mjs";
-import { isPublicKey } from "./wallet/core.mjs";
+import { isPublicKey, checkCosignerXpubs, keyFromXpub } from "./wallet/core.mjs";
 
 /** The one line every declaration started in the app must keep, word for word. */
 export const NO_RETURNS =
@@ -60,6 +60,7 @@ export function checkWithNewKey(c) {
   const r = checkCrowdlock(c);
   const problems = [...r.problems];
   (c.cosigner_keys ?? []).forEach((k, i) => { if (!isPublicKey(k)) problems.push(`cosigner_keys[${i}] is not a real public key`); });
+  problems.push(...checkCosignerXpubs(c).problems);
   return { ok: problems.length === 0, problems };
 }
 
@@ -79,7 +80,7 @@ const emptyDestinations = (c, today) => ({
   minimum_age_days: c.destination_wait_days, threshold: c.attestor_threshold, attestors: [], entries: [],
 });
 
-function crowdlockFile({ name, about, disclaimer, title, declFile, declText, network, minimumSats, cosigner, regDir, site }) {
+function crowdlockFile({ name, about, disclaimer, title, declFile, declText, network, minimumSats, cosigner, cosignerXpub = null, regDir, site }) {
   return {
     format: 1,
     name,
@@ -92,6 +93,7 @@ function crowdlockFile({ name, about, disclaimer, title, declFile, declText, net
     lock_lengths_years: network === "mainnet" ? REAL_LENGTHS : TEST_LENGTHS,
     minimum_counted_lock_sats: minimumSats,
     cosigner_keys: [cosigner],
+    ...(cosignerXpub ? { cosigner_xpubs: [cosignerXpub] } : {}),
     gathering_window_max_days: 28,
     settlement_window_max_days: 14,
     destination_wait_days: 14,
@@ -152,6 +154,11 @@ ${links.map((l) => `<h2>${esc(l.label)}</h2>
  * Returns { ok, problems } or { ok: true, files, links }.
  */
 export function buildCrowdlock({ name, about, title, declarationText, network, minimumSats, cosignerPubkey, testCosignerPubkey, siteBase, today }) {
+  // Either co-signer may be given as a plain key or as its xpub; an xpub is
+  // kept beside the key it stands for, so hardware wallets can lock with it.
+  const asKey = (v) => { const k = keyFromXpub(v); return k ? { key: k, xpub: String(v).trim() } : { key: v, xpub: null }; };
+  const real = asKey(cosignerPubkey), test = asKey(testCosignerPubkey);
+  cosignerPubkey = real.key; testCosignerPubkey = test.key;
   const problems = [];
   const need = (cond, msg) => { if (!cond) problems.push(msg); };
   name = String(name ?? "").trim();
@@ -183,7 +190,7 @@ export function buildCrowdlock({ name, about, title, declarationText, network, m
   if (network === "mainnet") {
     const c = crowdlockFile({
       name, about, disclaimer: "Nobody receives anything financial in return, ever. This is not an investment.",
-      title, declFile: "declaration.txt", declText: text, network, minimumSats, cosigner: cosignerPubkey, regDir: "", site: siteBase,
+      title, declFile: "declaration.txt", declText: text, network, minimumSats, cosigner: cosignerPubkey, cosignerXpub: real.xpub, regDir: "", site: siteBase,
     });
     files[`crowdlocks/${slug}.json`] = JSON.stringify(c, null, 2) + "\n";
     files["declaration.txt"] = text;
@@ -200,7 +207,7 @@ export function buildCrowdlock({ name, about, title, declarationText, network, m
     name: `${name} — TEST`, about: `A test copy of ${name} on Bitcoin's test network, for practising with test money. Nothing here is real.`,
     disclaimer: "TEST ONLY. Test bitcoin has no value. Joining here does not make you a member of the real one.",
     title: `${title} — test copy`, declFile: "test/declaration.txt", declText: testText, network: "testnet4",
-    minimumSats: 10000, cosigner: testCosignerPubkey, regDir: "test/", site: siteBase,
+    minimumSats: 10000, cosigner: testCosignerPubkey, cosignerXpub: test.xpub, regDir: "test/", site: siteBase,
   });
   files[`crowdlocks/${slug}-test.json`] = JSON.stringify(t, null, 2) + "\n";
   files["test/declaration.txt"] = testText;

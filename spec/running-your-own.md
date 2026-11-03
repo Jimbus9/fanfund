@@ -116,6 +116,7 @@ Fund's is `crowdlocks/kop-fund.json`: copy it and change the values.
 | `lock_lengths_years` | The fixed options a member may choose. Whole years on real bitcoin; a test Crowdlock may offer fractions (an hour is `1/8766`) so a lock can be made and taken home in one sitting | 1, 3 or 5 |
 | `minimum_counted_lock_sats` | Below this, a lock does not count towards the total | 200,000 |
 | `cosigner_keys` | Public keys for the lock's purchase exit | **Not yet chosen** — an empty list |
+| `cosigner_xpubs` | *Optional.* Each co-signer key's xpub, so members with a hardware wallet can lock (see below). Each must stand for one of `cosigner_keys` | Left out |
 | `gathering_window_max_days` | Longest a proposal may gather | 28 |
 | `settlement_window_max_days` | Longest settlement may take after that | 14 |
 | `destination_wait_days` | How long a destination must be public before a proposal may name it | 14 |
@@ -158,6 +159,16 @@ The same words give the same key in all three — the app's tests check this
 against the published BIP84 example. Publish only the public key, in
 `cosigner_keys`. The words go on paper, twice, one copy kept away from the
 other; they are never saved on a device.
+
+**Publish its xpub too.** A hardware wallet such as a Ledger will only sign
+for a lock whose keys it is given as xpubs — the longer form a key comes
+from — and works the plain key out itself. The co-signer key is the first key
+(`/0/0`) of the account xpub at `m/84'/0'/0'`, so the lock is exactly the same
+either way: the xpub only lets the device recognise it. The app shows it beside
+the key, `generate.mjs` and `restore.mjs` print it, and Sparrow shows it as the
+wallet's master public key. Put it in `cosigner_xpubs`; the app and this
+repository's tests refuse one that does not stand for a listed key. Without it,
+members on hardware wallets cannot lock — nobody else is affected.
 
 **Never use a wallet's own words.** At this standard slot they would make the
 wallet's own key, and a lock refuses a co-signer that is its owner.

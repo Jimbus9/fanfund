@@ -188,6 +188,48 @@ check("The same key twice is refused", dupe.includes("already has that"));
 const offCurve = "02" + "00".repeat(31) + "05";
 let bad = ""; try { await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: offCurve, check: checkWithNewKey }, withContents({ push: true })); } catch (e) { bad = e.message; }
 check("A key that only looks right — not a real point on the curve — is refused", !isPublicKey(offCurve) && isPublicKey(newKey) && bad.includes("not a real public key"), bad);
+
+// Co-signer xpubs, for hardware wallets.
+{
+  const { keyFromXpub, xpubForNetwork, checkCosignerXpubs, cosignerKeyFromWords, cosignerFromWords } = await import("../src/wallet/core.mjs");
+  const BIP84 = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+  const XP = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
+  const KEY = "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c";
+  check("A co-signer key's xpub is BIP84's published account key, and its first key is the co-signer key",
+    cosignerKeyFromWords(BIP84).xpub === XP && keyFromXpub(XP) === KEY);
+  const tp = xpubForNetwork(XP, "testnet4");
+  check("The same xpub rewritten for test networks (tpub) stands for the same key, and converts back",
+    tp.startsWith("tpub") && keyFromXpub(tp) === KEY && xpubForNetwork(tp, "mainnet") === XP);
+  check("A test copy's phone-made co-signer comes with its tpub", keyFromXpub(cosignerFromWords(words, "testnet4").xpub) === co.publicKey);
+  check("Something that isn't an xpub stands for nothing", keyFromXpub(KEY) === null && keyFromXpub("xpub123") === null);
+  check("An xpub that stands for one of the keys passes", checkCosignerXpubs({ cosigner_keys: [KEY], cosigner_xpubs: [XP] }).ok);
+  const wrong = checkCosignerXpubs({ cosigner_keys: [co.publicKey], cosigner_xpubs: [XP] });
+  check("An xpub for a key that isn't listed is refused — a hardware wallet would build a lock nobody counts", !wrong.ok && wrong.problems[0].includes("not one of"));
+
+  const withX = buildCrowdlock({ ...base, declarationText: filled, cosignerPubkey: XP, testCosignerPubkey: cosignerFromWords(words, "testnet4").xpub });
+  const rf = JSON.parse(withX.files[`crowdlocks/${real.slug}.json`]), tf = JSON.parse(withX.files[`crowdlocks/${real.slug}-test.json`]);
+  check("Starting a Crowdlock with an xpub publishes the key and the xpub together",
+    withX.ok && rf.cosigner_keys[0] === KEY && rf.cosigner_xpubs[0] === XP && tf.cosigner_keys[0] === co.publicKey && tf.cosigner_xpubs[0].startsWith("tpub"));
+
+  // Adding the xpub for a key the Crowdlock already has.
+  const keyed = JSON.stringify({ ...JSON.parse(realFile), cosigner_keys: [KEY] }, null, 2);
+  const serve = (file) => { const inner = fakeRepo({ push: true }); return async (url, init = {}) => {
+    const u = String(url).replace("https://api.github.com", "");
+    if (u === `/repos/somefan/the-pub-fund/contents/${realPath}`) return Response.json({ content: Buffer.from(file).toString("base64") });
+    return inner(url, init);
+  }; };
+  const onlyX = await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: KEY, xpub: XP, check: checkWithNewKey }, serve(keyed));
+  check("An xpub for a key already there is added on its own, the keys unchanged",
+    onlyX.keys.length === 1 && onlyX.keys[0] === KEY && onlyX.xpubs[0] === XP && gcalls.message.startsWith("Add a co-signer xpub"));
+  const both = await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: KEY, xpub: XP, check: checkWithNewKey }, serve(realFile));
+  check("A new key given as an xpub adds the key and the xpub", both.keys.at(-1) === KEY && both.xpubs[0] === XP);
+  let again = ""; try { await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: KEY, xpub: XP, check: checkWithNewKey }, serve(JSON.stringify({ ...JSON.parse(keyed), cosigner_xpubs: [XP] }))); } catch (e) { again = e.message; }
+  check("…and the same xpub twice is refused", again.includes("already has"));
+  const other = cosignerKeyFromWords(words).publicKey;
+  const notKop = JSON.stringify({ ...JSON.parse(realFile), cosigner_keys: [co.publicKey] }, null, 2);
+  let mismatch = ""; try { await addCosignerKey({ token: "t", owner: "somefan", repo: "the-pub-fund", path: realPath, key: other, xpub: XP, check: checkWithNewKey }, serve(notKop)); } catch (e) { mismatch = e.message; }
+  check("An xpub that doesn't stand for the key being added is refused", mismatch.includes("not one of"));
+}
 check("A Crowdlock's file is found inside its repository from its link",
   pathInRepo("https://somefan.github.io/the-pub-fund/crowdlocks/the-pub-fund.json") === "crowdlocks/the-pub-fund.json" && pathInRepo("https://example.com/x.json") === null);
 

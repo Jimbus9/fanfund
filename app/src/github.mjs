@@ -205,19 +205,35 @@ let session = null;
  * key at the end — the newest key is the one new locks use — and commits.
  * `check(file)` is run on the result and must return { ok, problems }.
  */
-export async function addCosignerKey({ token, owner, repo, path, key, check }, fetchImpl = globalThis.fetch) {
+export async function addCosignerKey({ token, owner, repo, path, key, xpub = null, check }, fetchImpl = globalThis.fetch) {
   const gh = client(token, fetchImpl);
   const got = await gh("GET", `/repos/${owner}/${repo}/contents/${path}`);
   const c = JSON.parse(Buffer.from(String(got.content).replace(/\s/g, ""), "base64").toString("utf8"));
   const k = String(key).trim().toLowerCase();
   const keys = Array.isArray(c.cosigner_keys) ? c.cosigner_keys : [];
-  if (keys.some((x) => x.slice(2) === k.slice(2))) throw new Error("This Crowdlock already has that co-signer key.");
-  const next = { ...c, cosigner_keys: [...keys, k] };
+  const xpubs = Array.isArray(c.cosigner_xpubs) ? c.cosigner_xpubs : [];
+  const hasKey = keys.some((x) => x.slice(2) === k.slice(2));
+  const x = xpub ? String(xpub).trim() : null;
+  // An xpub for a key already there is added on its own: the key keeps its
+  // place, and members with a hardware wallet can now lock with it.
+  if (hasKey && (!x || xpubs.includes(x))) throw new Error("This Crowdlock already has that co-signer key.");
+  const newKeys = hasKey ? keys : [...keys, k];
+  const newXpubs = x && !xpubs.includes(x) ? [...xpubs, x] : xpubs;
+  // Keep the xpubs beside the keys in the file, where a person reading it expects them.
+  const next = {};
+  for (const [name, v] of Object.entries(c)) {
+    if (name === "cosigner_xpubs") continue;
+    next[name] = name === "cosigner_keys" ? newKeys : v;
+    if (name === "cosigner_keys" && newXpubs.length) next.cosigner_xpubs = newXpubs;
+  }
   const r = check ? check(next) : { ok: true };
   if (!r.ok) throw new Error(`That would break the Crowdlock file: ${r.problems.join("; ")}`);
+  const what = hasKey ? "the xpub for a co-signer key it already has" : x ? "a co-signer key, with its xpub," : "a co-signer key";
   const sha = await commitFiles(gh, owner, repo, { [path]: JSON.stringify(next, null, 2) + "\n" },
-    `Add a co-signer key to ${c.name ?? path}\n\nAdded from the Crowdlock app by its founder or a maintainer. The key is added alongside the ${keys.length} already there, none removed, so every existing lock still counts. New locks use this key.`);
-  return { sha, keys: next.cosigner_keys };
+    hasKey
+      ? `Add a co-signer xpub to ${c.name ?? path}\n\nAdded from the Crowdlock app by its founder or a maintainer: ${what}, so members with a hardware wallet can lock with it. The keys are unchanged.`
+      : `Add a co-signer key to ${c.name ?? path}\n\nAdded from the Crowdlock app by its founder or a maintainer: ${what} alongside the ${keys.length} already there, none removed, so every existing lock still counts. New locks use this key.`);
+  return { sha, keys: next.cosigner_keys, xpubs: next.cosigner_xpubs ?? [] };
 }
 
 export function rememberSignIn(token) { session = { token, until: Date.now() + 60 * 60 * 1000 }; }

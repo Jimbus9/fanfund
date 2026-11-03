@@ -87,6 +87,15 @@ refuses("…or as a key and its mirror",
   checkCrowdlock({ ...kop, cosigner_keys: [K("ab")], attestor_keys: [mirror(K("ab"))] }), "never be a key that spends");
 refuses("An uncompressed or malformed co-signer key",
   checkCrowdlock({ ...kop, cosigner_keys: ["04" + "ab".repeat(64)] }), "not a compressed public key");
+const X = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
+check("A co-signer xpub beside its key is accepted",
+  checkCrowdlock({ ...kop, cosigner_keys: [K("ab")], cosigner_xpubs: [X] }).ok);
+refuses("Something that isn't an xpub",
+  checkCrowdlock({ ...kop, cosigner_keys: [K("ab")], cosigner_xpubs: [K("ab")] }), "not an xpub");
+refuses("More xpubs than co-signer keys",
+  checkCrowdlock({ ...kop, cosigner_keys: [], cosigner_xpubs: [X] }), "more xpubs");
+refuses("The same xpub twice",
+  checkCrowdlock({ ...kop, cosigner_keys: [K("ab"), K("cd")], cosigner_xpubs: [X, X] }), "same xpub twice");
 refuses("A join endpoint that is not https",
   checkCrowdlock({ ...kop, join_endpoint: "http://example.com/join/submit" }), "join_endpoint");
 refuses("A lock endpoint that is not https",

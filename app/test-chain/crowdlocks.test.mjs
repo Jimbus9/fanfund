@@ -197,6 +197,13 @@ check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
     for (const k of JSON.parse(readFileSync(new URL(f, dir), "utf8")).cosigner_keys ?? []) if (!isPublicKey(k)) bad.push(`${f}: ${k.slice(0, 12)}…`);
   }
   check("Every co-signer key this repository publishes is a real public key", bad.length === 0, bad.join(", "));
+  const { checkCosignerXpubs } = await import("../src/wallet/core.mjs");
+  const badX = [];
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json") && x !== "index.json")) {
+    const r = checkCosignerXpubs(JSON.parse(readFileSync(new URL(f, dir), "utf8")));
+    if (!r.ok) badX.push(`${f}: ${r.problems.join("; ")}`);
+  }
+  check("Every co-signer xpub this repository publishes stands for one of its keys", badX.length === 0, badX.join(", "));
 }
 
 // The app's lock must be the very script the method's reference code reads,

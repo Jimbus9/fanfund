@@ -27,7 +27,7 @@ import QRCode from "react-native-qrcode-svg";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, suggestWords, waitingBalance, buildSend, signStatement,
   lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords, newCosignerWords, cosignerKeyFromWords, COSIGNER_PATH,
-  isPublicKey,
+  isPublicKey, keyFromXpub, xpubForKey,
 } from "./src/wallet/core.mjs";
 // @ts-ignore — plain modules shared with the tests
 import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS, checkWithNewKey } from "./src/start.mjs";
@@ -894,9 +894,10 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
   const [typed, setTyped] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [pub, setPub] = useState<string | null>(null);
+  const [xpub, setXpub] = useState<string | null>(null);
   const list = coWords.split(" ");
   // Leave this screen and the words are gone from memory with it.
-  const leave = () => { setCoWords(""); setTyped(""); setPub(null); go({ name: "home", words: walletWords }); };
+  const leave = () => { setCoWords(""); setTyped(""); setPub(null); setXpub(null); go({ name: "home", words: walletWords }); };
 
   if (stage === "intro") return (
     <View>
@@ -926,7 +927,7 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
   if (stage === "check") return (
     <CheckEveryWord
       words={coWords}
-      onDone={() => { setPub(cosignerKeyFromWords(coWords).publicKey); setCoWords(""); setStage("result"); }}
+      onDone={() => { const k = cosignerKeyFromWords(coWords); setPub(k.publicKey); setXpub(k.xpub); setCoWords(""); setStage("result"); }}
       onShowAgain={() => setStage("show")}
     />
   );
@@ -939,7 +940,7 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
       {problem && <Text style={s.error}>{problem}</Text>}
       <Button label="Show the key" onPress={() => {
         if (tidyWords(typed) === tidyWords(walletWords)) { setProblem("Those are this wallet's own words. A co-signer key must have words of its own — otherwise it would be the same key as your member key."); return; }
-        try { setPub(cosignerKeyFromWords(typed).publicKey); setTyped(""); setStage("result"); }
+        try { const k = cosignerKeyFromWords(typed); setPub(k.publicKey); setXpub(k.xpub); setTyped(""); setStage("result"); }
         catch (e: any) { setProblem(String(e.message ?? e)); }
       }} />
       <Button label="Back" kind="plain" onPress={() => setStage("intro")} />
@@ -954,6 +955,10 @@ function CosignerKey({ words: walletWords, go }: { words: string; go: Go }) {
       <Text style={s.mono} selectable>{pub}</Text>
       <Text style={s.note}>Check what's scanned starts {pub?.slice(0, 6)} and ends {pub?.slice(-6)}.</Text>
       <Button label="Copy it" onPress={() => pub && Clipboard.setStringAsync(pub)} />
+      <Text style={s.h2}>Its xpub, for hardware wallets</Text>
+      <Text style={s.p}>Also public. It's the same key in the longer form a Ledger needs before it will lock with it. Paste this one into "Add this co-signer key" instead of the key above and the app adds both.</Text>
+      <Text style={s.mono} selectable>{xpub}</Text>
+      <Button label="Copy the xpub" kind="plain" onPress={() => xpub && Clipboard.setStringAsync(xpub)} />
       <Text style={s.note}>You can switch airplane mode off now. Keep the two paper copies apart.</Text>
       <Button label="Done" onPress={leave} />
     </View>
@@ -1038,11 +1043,15 @@ function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const k = key.trim().toLowerCase();
+  // A pasted xpub stands for its first key, and is published beside it.
+  const pastedXpub = keyFromXpub(key) ? key.trim() : null;
+  const k: string = (pastedXpub ? keyFromXpub(pastedXpub) : key.trim().toLowerCase()) ?? "";
+  const xpubs: string[] = c.crowdlock.cosigner_xpubs ?? [];
+  const has = keys.some((x) => x.slice(2) === k.slice(2));
   const problem = !k ? null
-    : !isPublicKey(k) ? "That isn't a public key: it should be 66 characters starting 02 or 03, copied whole."
+    : !isPublicKey(k) ? "That isn't a public key or an xpub. Copy it whole from where the key was made."
     : k.slice(2) === String(account.publicKey).slice(2) ? "That's your own wallet's key. A co-signer must be a separate key, or the person who locks could also approve the purchase alone."
-    : keys.some((x) => x.slice(2) === k.slice(2)) ? "This Crowdlock already has that key."
+    : has && (!pastedXpub || xpubs.includes(pastedXpub)) ? "This Crowdlock already has that key."
     : null;
   const path = pathInRepo(c.url);
   const add = async () => {
@@ -1050,12 +1059,12 @@ function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded
     try {
       await withSignIn(async (token) => {
         if (!(await canWrite(token, owner, repo))) throw new Error("Only this Crowdlock's founder and its maintainers can change it, and the GitHub account you signed in with isn't one of them.");
-        await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
+        await addCosignerKey({ token, owner, repo, path, key: k, xpub: pastedXpub as any, check: checkWithNewKey });
         // You made this change, so this phone needn't warn you about it —
         // but the website hasn't caught up yet, so it's expected, not seen.
         await saveExpectedKeys(c.url, [...(await loadExpectedKeys(c.url)), k]).catch(() => {});
         setKey("");
-        setMsg({ ok: true, text: "Added. Its website updates in a minute or two — then tap Refresh and new locks will use it." });
+        setMsg({ ok: true, text: has ? "Added its xpub. Its website updates in a minute or two." : "Added. Its website updates in a minute or two — then tap Refresh and new locks will use it." });
         setTimeout(onChange, 90000);
       });
     } catch (e: any) { setMsg({ ok: false, text: String(e.message ?? e) }); }
@@ -1066,11 +1075,13 @@ function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded
     {keys.length === 0 ? <Text style={s.note}>None yet, so nobody can lock for it. Add one below.</Text>
       : keys.map((x, i) => (
         <View key={x} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={[s.note, { flex: 1 }]}>{x.slice(0, 10)}…{x.slice(-8)}{i === keys.length - 1 ? "  · new locks use this one" : "  · kept for locks already made"}</Text>
+          <Text style={[s.note, { flex: 1 }]}>{x.slice(0, 10)}…{x.slice(-8)}{i === keys.length - 1 ? "  · new locks use this one" : "  · kept for locks already made"}{xpubForKey(c.crowdlock, x) ? "  · hardware wallets can lock" : ""}</Text>
           <Button label="Copy" kind="plain" onPress={() => Clipboard.setStringAsync(x)} />
         </View>))}
     <Text style={s.note}>Adding a key never removes one, so every lock already made keeps counting. Don't have one? Make it from Home → "Make a co-signer key", ideally on a phone that holds no money{c.crowdlock.network === "mainnet" ? ", and keep its words on paper only" : ""}.</Text>
-    <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={key} onChangeText={(t) => { setKey(t); setMsg(null); }} placeholder="Paste a public key: 02… or 03…" />
+    <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={key} onChangeText={(t) => { setKey(t); setMsg(null); }} placeholder="Paste its xpub, or its key: 02… or 03…" />
+    {!!pastedXpub && <Text style={s.note}>That xpub stands for {k.slice(0, 10)}…{k.slice(-8)}.{has ? " This Crowdlock already has that key, so only the xpub will be added." : ""}</Text>}
+    {keys.length > 0 && keys.some((x) => !xpubForKey(c.crowdlock, x)) && <Text style={s.note}>Members with a hardware wallet can only lock with a key whose xpub is published. To add one for a key already here, paste its xpub.</Text>}
     {problem && <Text style={s.error}>{problem}</Text>}
     {!path && <Text style={s.error}>Can't tell where this Crowdlock's file sits in its repository.</Text>}
     {codeView}
@@ -1240,7 +1251,8 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
 
   // The test copy's co-signer key is made here, from the founder's own words,
   // on a path of its own. The real one is pasted in from wherever it lives.
-  const testCo = useMemo(() => cosignerFromWords(words, "testnet4").publicKey, [words]);
+  const testCoKey = useMemo(() => cosignerFromWords(words, "testnet4"), [words]);
+  const testCo = testCoKey.publicKey;
 
   const input = (siteBase: string) => {
     const t = minimum.trim().replace(",", ".");
@@ -1248,7 +1260,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
     const minimumSats = /^\d*\.?\d{0,8}$/.test(t) && t !== "" ? Number(BigInt(w || "0") * 100000000n + BigInt((f + "00000000").slice(0, 8))) : NaN;
     return {
       name, about, title, declarationText: text, network, minimumSats,
-      cosignerPubkey: cosigner.trim().toLowerCase(), testCosignerPubkey: testPasted.trim().toLowerCase() || testCo,
+      cosignerPubkey: keyFromXpub(cosigner) ? cosigner.trim() : cosigner.trim().toLowerCase(), testCosignerPubkey: testPasted.trim() || testCoKey.xpub,
       siteBase, today: new Date().toISOString().slice(0, 10),
     };
   };
@@ -1364,15 +1376,16 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
         <Text style={s.label}>Minimum lock that counts, in BTC</Text>
         <TextInput style={s.input} keyboardType="decimal-pad" value={minimum} onChangeText={(t) => { setMinimum(t); setChecked(null); }} />
         <Text style={s.label}>Co-signer's public key</Text>
-        <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={cosigner} onChangeText={(t) => { setCosigner(t); setChecked(null); }} placeholder="02… or 03…, 66 characters" />
-        <Text style={s.note}>The co-signer can't take or keep anyone's money — only refuse to complete a purchase. Make this key with "Make a co-signer key" on Home (or Sparrow, Electrum, or the method's own script), keep its words on paper, and paste its public key here.</Text>
-        {!!cosigner.trim() && !isPublicKey(cosigner) && <Text style={s.error}>That isn't a public key: 66 characters starting 02 or 03, copied whole.</Text>}
+        <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={cosigner} onChangeText={(t) => { setCosigner(t); setChecked(null); }} placeholder="Its xpub, or its key: 02… or 03…" />
+        <Text style={s.note}>The co-signer can't take or keep anyone's money — only refuse to complete a purchase. Make this key with "Make a co-signer key" on Home (or Sparrow, Electrum, or the method's own script), keep its words on paper, and paste its xpub here — or its plain key, though then hardware wallets can't lock until the xpub is added.</Text>
+        {!!cosigner.trim() && !isPublicKey(cosigner) && !keyFromXpub(cosigner) && <Text style={s.error}>That isn't a public key or an xpub. Copy it whole from where the key was made.</Text>}
+        {!!keyFromXpub(cosigner) && <Text style={s.note}>That xpub stands for {keyFromXpub(cosigner)!.slice(0, 10)}…, and is published beside it so hardware wallets can lock.</Text>}
       </> : <Text style={s.note}>Test bitcoin has no value: practise everything — joining, locking, taking a lock home — before anything is real.</Text>}
 
       <Text style={s.label}>{network === "mainnet" ? "The test copy's co-signer key" : "Co-signer key"}</Text>
       <Text style={s.note}>{testPasted.trim() ? "Using the key you pasted." : `Made on this phone from your backup words: ${testCo.slice(0, 10)}…${testCo.slice(-8)}. Or paste a practice key you made instead:`}</Text>
-      <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={testPasted} onChangeText={(t) => { setTestPasted(t); setChecked(null); }} placeholder="Optional: 02… or 03…" />
-      {!!testPasted.trim() && !isPublicKey(testPasted) && <Text style={s.error}>That isn't a public key: 66 characters starting 02 or 03, copied whole.</Text>}
+      <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={testPasted} onChangeText={(t) => { setTestPasted(t); setChecked(null); }} placeholder="Optional: an xpub, or a key 02… or 03…" />
+      {!!testPasted.trim() && !isPublicKey(testPasted) && !keyFromXpub(testPasted) && <Text style={s.error}>That isn't a public key or an xpub. Copy it whole from where the key was made.</Text>}
       <Text style={s.note}>You can add more co-signer keys later, under "Look after this Crowdlock".</Text>
 
       {problems && problems.map((p, i) => <Text key={i} style={s.error}>{p}</Text>)}
