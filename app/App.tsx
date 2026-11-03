@@ -69,7 +69,7 @@ type Screen =
   | { name: "startCrowdlock"; words: string }
   | { name: "findCrowdlocks"; words: string }
   | { name: "cosignerKey"; words: string }
-  | { name: "ledgerSetup" };
+  | { name: "ledgerSetup"; from?: string };
 
 export default function App() {
   const [screen, setScreenRaw] = useState<Screen>({ name: "loading" });
@@ -122,7 +122,7 @@ export default function App() {
           {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
           {screen.name === "findCrowdlocks" && <FindCrowdlocks words={screen.words} go={setScreen} />}
           {screen.name === "cosignerKey" && <CosignerKey words={screen.words} go={setScreen} />}
-          {screen.name === "ledgerSetup" && <LedgerSetup go={setScreen} />}
+          {screen.name === "ledgerSetup" && <LedgerSetup from={screen.from} go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -163,7 +163,7 @@ function Welcome({ go }: { go: Go }) {
 
 // Setting up a Ledger as this phone's wallet. The key stays on the device;
 // the phone keeps only the account's public part, to show balances without it.
-function LedgerSetup({ go }: { go: Go }) {
+function LedgerSetup({ from, go }: { from?: string; go: Go }) {
   const [stage, setStage] = useState<"start" | "looking" | "reading" | "found">("start");
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -218,11 +218,19 @@ function LedgerSetup({ go }: { go: Go }) {
       {stage === "found" && account && <>
         <Text style={s.p}>This is your Ledger's wallet. It's the same address Ledger Live, Sparrow or any standard wallet shows for this Ledger's first native segwit account.</Text>
         <Text style={s.mono} selectable>{account.address}</Text>
-        <Button label="Use this Ledger" onPress={async () => { const text = ledgerWalletText(wallet!); await saveWords(text); go({ name: "home", words: text }); }} />
+        <Button label="Copy address" kind="plain" onPress={() => Clipboard.setStringAsync(account.address)} />
+        {from && <Text style={s.note}>To move money onto it first, copy the address, go Back, and send it from this phone's wallet. Then come back here. Using this Ledger replaces that wallet on this phone — only do it once its 12 words are written down.</Text>}
+        <Button label="Use this Ledger" onPress={async () => {
+          const text = ledgerWalletText(wallet!);
+          // A different wallet: forget the old one's saved lock terms (they're
+          // on the register, and restoring its words finds them again).
+          if (from) { await forgetSavedLocks(); await forgetLedgerStore(); }
+          await saveWords(text); go({ name: "home", words: text });
+        }} />
         <Button label="Try again" kind="plain" onPress={() => { setWallet(null); setStage("start"); }} />
       </>}
       {error && <Text style={s.error}>{error}</Text>}
-      <Button label="Back" kind="plain" onPress={() => { stop.current?.(); go({ name: "welcome" }); }} />
+      <Button label="Back" kind="plain" onPress={() => { stop.current?.(); go(from ? { name: "home", words: from } : { name: "welcome" }); }} />
     </View>
   );
 }
@@ -381,6 +389,7 @@ function Home({ words, go }: { words: string; go: Go }) {
       <Button label="Add a Crowdlock" kind="plain" onPress={() => go({ name: "addCrowdlock", words })} />
       <Button label="Start a Crowdlock" kind="plain" onPress={() => go({ name: "startCrowdlock", words })} />
       <Button label="Make a co-signer key" kind="plain" onPress={() => go({ name: "cosignerKey", words })} />
+      {account.kind !== "ledger" && <Button label="Use a Ledger instead" kind="plain" onPress={() => go({ name: "ledgerSetup", from: words })} />}
       <Button label="Remove wallet from this phone" kind="danger" onPress={remove} />
     </View>
   );
