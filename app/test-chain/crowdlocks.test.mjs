@@ -235,6 +235,9 @@ check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
   const gone = keyChanges([A, B], [B]);
   check("A removed key is caught", gone.changed && gone.removed[0] === A && gone.added.length === 0);
   check("A key swapped for its mirror (02 to 03) isn't a change", !keyChanges([A], ["03" + "a".repeat(64)]).changed);
+  check("A key this phone added doesn't warn when it appears", !keyChanges([A], [A, B], [B]).changed);
+  check("…nor while the website still shows the old list (the false 'removed' James saw)", !keyChanges([A], [A], [B]).changed);
+  check("A key someone else added still warns, alongside one this phone added", keyChanges([A], [A, B, "02" + "c".repeat(64)], [B]).added.length === 1);
   check("The warning links to the file's public history",
     historyLinkFor("https://somefan.github.io/the-pub-fund/crowdlocks/the-pub-fund.json") === "https://github.com/somefan/the-pub-fund/commits/main/crowdlocks/the-pub-fund.json");
 }

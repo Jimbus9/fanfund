@@ -50,7 +50,7 @@ import {
 import { postToRelays, announce, fetchAnnouncements } from "./src/relays.mjs";
 import {
   loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
-  loadSavedLocks, saveLock, forgetSavedLocks, loadSeenKeys, saveSeenKeys } from "./src/storage";
+  loadSavedLocks, saveLock, forgetSavedLocks, loadSeenKeys, saveSeenKeys, loadExpectedKeys, saveExpectedKeys } from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
 type Screen =
@@ -441,8 +441,15 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
       // Has anyone changed its co-signer keys since this phone last looked?
       const keys: string[] = loaded.crowdlock.cosigner_keys ?? [];
       const seen = await loadSeenKeys(url);
-      const ch = keyChanges(seen, keys);
+      const expected = await loadExpectedKeys(url);
+      const ch = keyChanges(seen, keys, expected);
       if (seen === null) await saveSeenKeys(url, keys).catch(() => {});
+      else if (!ch.changed && keys.length !== seen.length) {
+        // A key this phone added has now reached the website: it's seen.
+        await saveSeenKeys(url, keys).catch(() => {});
+        const x = new Set(keys.map((k) => k.slice(2)));
+        await saveExpectedKeys(url, expected.filter((k) => !x.has(k.slice(2)))).catch(() => {});
+      }
       setKeyChange(ch.changed ? { added: ch.added, removed: ch.removed } : null);
       committedTotal(loaded).then(setTotal).catch(() => setTotal(null));
       coSignerRecord(loaded).then(setRecord).catch(() => setRecord(null));
@@ -1043,9 +1050,10 @@ function CosignerKeys({ c, account, owner, repo, onChange }: { c: Extract<Loaded
     try {
       await withSignIn(async (token) => {
         if (!(await canWrite(token, owner, repo))) throw new Error("Only this Crowdlock's founder and its maintainers can change it, and the GitHub account you signed in with isn't one of them.");
-        const r = await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
-        // You made this change, so this phone needn't warn you about it.
-        await saveSeenKeys(c.url, r.keys).catch(() => {});
+        await addCosignerKey({ token, owner, repo, path, key: k, check: checkWithNewKey });
+        // You made this change, so this phone needn't warn you about it —
+        // but the website hasn't caught up yet, so it's expected, not seen.
+        await saveExpectedKeys(c.url, [...(await loadExpectedKeys(c.url)), k]).catch(() => {});
         setKey("");
         setMsg({ ok: true, text: "Added. Its website updates in a minute or two — then tap Refresh and new locks will use it." });
         setTimeout(onChange, 90000);

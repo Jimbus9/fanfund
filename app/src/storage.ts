@@ -78,3 +78,20 @@ export async function saveSeenKeys(url: string, keys: string[]): Promise<void> {
   all[url] = keys;
   await SecureStore.setItemAsync(SEEN_KEYS, JSON.stringify(all));
 }
+
+// Keys this phone added itself, waiting for the website to show them. Kept
+// apart from what it has seen, because the website lags a minute or more
+// behind GitHub: treating an added key as already seen made the stale page
+// look like the key had been removed.
+const EXPECTED_KEYS = "crowdlock.expectedkeys.v1";
+
+export async function loadExpectedKeys(url: string): Promise<string[]> {
+  try { return JSON.parse((await SecureStore.getItemAsync(EXPECTED_KEYS)) ?? "{}")[url] ?? []; } catch { return []; }
+}
+
+export async function saveExpectedKeys(url: string, keys: string[]): Promise<void> {
+  let all: Record<string, string[]> = {};
+  try { all = JSON.parse((await SecureStore.getItemAsync(EXPECTED_KEYS)) ?? "{}"); } catch {}
+  if (keys.length) all[url] = keys; else delete all[url];
+  await SecureStore.setItemAsync(EXPECTED_KEYS, JSON.stringify(all));
+}

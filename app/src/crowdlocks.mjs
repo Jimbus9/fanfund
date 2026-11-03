@@ -306,10 +306,12 @@ export function newestCosigner(crowdlock) {
  * `seen` is the list it saw then, or null the first time (nothing to compare,
  * so nothing to warn about). Compared on the x-coordinate, as the checks are.
  */
-export function keyChanges(seen, now) {
+export function keyChanges(seen, now, expected = []) {
   if (!Array.isArray(seen)) return { added: [], removed: [], changed: false };
   const x = (list) => new Set((list ?? []).map((k) => String(k).toLowerCase().slice(2)));
-  const before = x(seen), after = x(now);
+  // `expected` is a key this phone added itself: no warning when it appears,
+  // and none while the website hasn't caught up with it yet either.
+  const before = x([...seen, ...(expected ?? [])]), after = x(now);
   const added = (now ?? []).filter((k) => !before.has(String(k).toLowerCase().slice(2)));
   const removed = seen.filter((k) => !after.has(String(k).toLowerCase().slice(2)));
   return { added, removed, changed: added.length + removed.length > 0 };
