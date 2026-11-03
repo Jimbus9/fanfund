@@ -33,6 +33,7 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { BIP32, Output, Psbt, signers, networks, keyExpressionBIP32 } from "@bitcoinerlab/descriptors";
 import * as ecc from "@bitcoinerlab/secp256k1";
 import bs58check from "bs58check";
+import * as ledgerApi from "@bitcoinerlab/descriptors/ledger";
 // The register's own verifier, shared with the website: the message hash a
 // signature is made over is computed by exactly the code that later checks it.
 import { messageHash } from "../../../method/js/verify.mjs";
@@ -325,7 +326,7 @@ export async function buildSend({ account, chain, to, amount, feeRate }) {
   dest.updatePsbtAsOutput({ psbt, value: sent });
   if (change > 0n) account.output.updatePsbtAsOutput({ psbt, value: change });
 
-  signers.signBIP32({ psbt, masterNode: account.signer() });
+  await signWith(account, psbt);
   for (const finalize of finalizers) finalize({ psbt });
 
   const tx = psbt.extractTransaction();
@@ -362,8 +363,41 @@ export function lockDate(years, nowSeconds = Math.floor(Date.now() / 1000)) {
   return years * YEAR < DAY ? t : Math.ceil(t / DAY) * DAY;
 }
 
-function lockDescriptor(account, cosignerPubkey, locktime) {
-  return `wsh(and_v(v:pk(${account.keyExpression}),or_i(after(${locktime}),pk(${cosignerPubkey}))))`;
+function lockDescriptor(account, cosignerPubkey, locktime, cosignerXpub = null) {
+  return `wsh(and_v(v:pk(${account.keyExpression}),or_i(after(${locktime}),pk(${cosignerExpression(account, cosignerPubkey, cosignerXpub)}))))`;
+}
+
+/**
+ * How the lock names its co-signer. The same key either way — a hardware
+ * wallet just needs it written as its xpub's first key, so the script and the
+ * address are identical. Refuses an xpub that stands for a different key.
+ */
+function cosignerExpression(account, cosignerPubkey, cosignerXpub) {
+  if (account.kind !== "ledger") return cosignerPubkey;
+  if (!cosignerXpub) throw new Error("this Crowdlock hasn't published its co-signer's xpub, which a hardware wallet needs before it can lock — ask its founder to add it");
+  if (keyFromXpub(cosignerXpub) !== String(cosignerPubkey).toLowerCase()) throw new Error("the co-signer's xpub doesn't stand for its key — refusing");
+  return `${xpubForNetwork(cosignerXpub, account.network)}/0/0`;
+}
+
+/** What a Ledger shows as the lock's name when asked to approve it once. */
+export function lockPolicyName(locktime) {
+  const d = new Date(locktime * 1000).toISOString();
+  return `Crowdlock until ${d.slice(0, 10)}${locktime % DAY ? " " + d.slice(11, 16) : ""}`;
+}
+
+/**
+ * Sign every input this account can sign. Backup words sign here; a Ledger
+ * signs on the device, after it has approved, once, the rules of each lock it
+ * is asked to open (`policies`: { descriptor, name }).
+ */
+async function signWith(account, psbt, policies = []) {
+  if (account.kind === "ledger") {
+    return account.useLedger(async (session) => {
+      for (const p of policies) await ledgerApi.registerPolicy({ descriptor: p.descriptor, session, name: p.name });
+      await ledgerApi.signers.sign({ psbt, session });
+    });
+  }
+  signers.signBIP32({ psbt, masterNode: account.signer() });
 }
 
 /**
@@ -378,7 +412,9 @@ export function lockFor({ account, cosignerPubkey, locktime }) {
     throw new Error("the co-signer key is your own key — that would not be a lock");
   }
   if (!Number.isInteger(locktime) || locktime < 500000000) throw new Error("a lock's date must be a date");
-  const output = new Output({ descriptor: lockDescriptor(account, cosigner, locktime), network: account.network });
+  // The address, from the plain keys: identical whichever way a wallet names
+  // the co-signer, so it is worked out the one way for everybody.
+  const output = new Output({ descriptor: lockDescriptor({ ...account, kind: "words" }, cosigner, locktime), network: account.network });
   return { address: output.getAddress(), ownerPubkey: account.publicKey, cosignerPubkey: cosigner, locktime };
 }
 
@@ -393,6 +429,9 @@ export function lockFor({ account, cosignerPubkey, locktime }) {
 export async function buildLock({ account, chain, lock, feeRate, amount = "all" }) {
   const check = lockFor({ account, cosignerPubkey: lock.cosignerPubkey, locktime: lock.locktime });
   if (check.address !== lock.address) throw new Error("those lock terms do not make that address — refusing");
+  // A Ledger can only take a lock home if it can recognise it, so it never
+  // locks money into one it couldn't open: the co-signer's xpub must be there.
+  if (account.kind === "ledger") cosignerExpression(account, lock.cosignerPubkey, lock.cosignerXpub);
   return buildSend({ account, chain, to: lock.address, amount, feeRate });
 }
 
@@ -440,11 +479,8 @@ export async function takeHome({ account, chain, lock, feeRate, medianTime, to, 
 
   // signersPubKeys tells the library only the owner will sign, so it takes
   // the going-home branch and sets the transaction's date itself.
-  const out = new Output({
-    descriptor: lockDescriptor(account, check.cosignerPubkey, lock.locktime),
-    network: net,
-    signersPubKeys: [fromHex(account.publicKey)],
-  });
+  const descriptor = lockDescriptor(account, check.cosignerPubkey, lock.locktime, lock.cosignerXpub);
+  const out = new Output({ descriptor, network: net, signersPubKeys: [fromHex(account.publicKey)] });
   let dest;
   try { dest = new Output({ descriptor: `addr(${String(to ?? account.address).trim()})`, network: net }); }
   catch { throw new Error("that is not an address on this network"); }
@@ -466,7 +502,7 @@ export async function takeHome({ account, chain, lock, feeRate, medianTime, to, 
     finalizers.push(out.updatePsbtAsInput({ psbt, txHex: await chain.txHex(c.txid), vout: c.vout }));
   }
   dest.updatePsbtAsOutput({ psbt, value: sent });
-  signers.signBIP32({ psbt, masterNode: account.signer() });
+  await signWith(account, psbt, [{ descriptor, name: lockPolicyName(lock.locktime) }]);
   for (const finalize of finalizers) finalize({ psbt });
   const tx = psbt.extractTransaction();
   return { hex: tx.toHex(), txid: tx.getId(), fee, sent };
@@ -496,11 +532,8 @@ export async function relock({ account, chain, lock, newLock, feeRate, medianTim
   if (next.address !== newLock.address) throw new Error("the new lock's terms do not make its address — refusing");
   if (next.address === old.address) throw new Error("the new lock must have a new date");
 
-  const oldOut = new Output({
-    descriptor: lockDescriptor(account, old.cosignerPubkey, lock.locktime),
-    network: net,
-    signersPubKeys: [fromHex(account.publicKey)],
-  });
+  const oldDescriptor = lockDescriptor(account, old.cosignerPubkey, lock.locktime, lock.cosignerXpub);
+  const oldOut = new Output({ descriptor: oldDescriptor, network: net, signersPubKeys: [fromHex(account.publicKey)] });
   const dest = new Output({ descriptor: `addr(${next.address})`, network: net });
 
   const lockCoins = (await chain.utxos(lock.address)).filter((c) => c.confirmed);
@@ -530,7 +563,7 @@ export async function relock({ account, chain, lock, newLock, feeRate, medianTim
     waitIndexes.push(psbt.inputCount - 1);
   }
   dest.updatePsbtAsOutput({ psbt, value: sent });
-  signers.signBIP32({ psbt, masterNode: account.signer() });
+  await signWith(account, psbt, [{ descriptor: oldDescriptor, name: lockPolicyName(lock.locktime) }]);
   for (const finalize of finalizers) finalize({ psbt });
   for (const i of waitIndexes) psbt.finalizeInput(i);
   const tx = psbt.extractTransaction();
@@ -550,6 +583,15 @@ export async function relock({ account, chain, lock, newLock, feeRate, medianTim
  * number a signed message carries). Ours is only the standard first byte:
  * 31 + recovery number, meaning "compressed key".
  */
+export async function signStatementWith(account, statement) {
+  if (account.kind !== "ledger") return signStatement(account, statement);
+  // The Ledger signs the same standard Bitcoin Signed Message, shown on its
+  // own screen first; the register checks it with exactly the same code.
+  const sig = await account.useLedger((session) =>
+    ledgerApi.signMessage({ descriptor: `wpkh(${account.keyExpression})`, session, message: statement }));
+  return typeof sig === "string" ? sig : toBase64(sig);
+}
+
 export function signStatement(account, statement) {
   const node = account.signer().derivePath(account.path);
   const { signature, recoveryId } = ecc.signRecoverable(messageHash(statement), node.privateKey);
@@ -585,4 +627,50 @@ function toHex(bytes) {
 export function isPublicKey(hex) {
   const h = String(hex ?? "").trim().toLowerCase();
   return /^0[23][0-9a-f]{64}$/.test(h) && ecc.isPoint(Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16)));
+}
+
+// ---------------------------------------------------------------------------
+// A Ledger wallet
+//
+// The same standard account as backup words (m/84'/coin'/0', first address),
+// but the key never leaves the device. Everything the app shows is worked out
+// from the account's xpub, read from the Ledger once; signing asks the device
+// each time, over whatever connection `useLedger` opens.
+// ---------------------------------------------------------------------------
+
+/** The origin path of a Ledger account, by network. */
+export function ledgerOriginPath(network = "mainnet") {
+  const { coin } = typeof network === "string" ? NETWORKS[network] : network;
+  return `/84'/${coin}'/0'`;
+}
+
+/** Read a Ledger's account once: its key expression, from the device. */
+export async function readLedgerAccount(session, network = "mainnet") {
+  return ledgerApi.keyExpression({ session, originPath: ledgerOriginPath(network), keyPath: "/0/0" });
+}
+
+/**
+ * A wallet whose key is on a Ledger. `keyExpression` is what readLedgerAccount
+ * returned (saved, so the phone can show balances without the device);
+ * `useLedger(fn)` connects, runs fn(session), and disconnects.
+ */
+export function ledgerAccountFrom({ keyExpression, network = "mainnet", useLedger }) {
+  const { network: net } = typeof network === "string" ? NETWORKS[network] : network;
+  const m = /^\[([0-9a-f]{8})(\/[0-9'h/]+)\]([xt]pub[1-9A-HJ-NP-Za-km-z]+)\/0\/0$/.exec(String(keyExpression ?? ""));
+  if (!m) throw new Error("that is not a Ledger account the app understands");
+  const x = readXpub(m[3]);
+  if (!x) throw new Error("that Ledger account's xpub can't be read");
+  const output = new Output({ descriptor: `wpkh(${keyExpression})`, network: net });
+  return {
+    kind: "ledger",
+    network: net,
+    fingerprint: m[1],
+    path: `m${m[2]}/0/0`,
+    publicKey: toHex(x.node.derive(0).derive(0).publicKey),
+    address: output.getAddress(),
+    keyExpression,
+    output,
+    useLedger,
+    signer: () => { throw new Error("this wallet's key is on a Ledger"); },
+  };
 }

@@ -321,6 +321,89 @@ await refuses("Locking again before the date has passed",
   async () => relock({ account: saver, chain, lock: renewed, newLock: lockFor({ account: saver, cosignerPubkey: cosigner.publicKey, locktime: renewed.locktime + 86400 }), feeRate: 2, medianTime: await chain.medianTime() }),
   "not passed yet");
 
+// ---------------------------------------------------------------------------
+rule("MILESTONE 4: A LEDGER WALLET — JOIN, LOCK, TAKE IT HOME, LOCK AGAIN");
+
+{
+  const { fakeLedger } = await import("./fake-ledger.mjs");
+  const bitcoinApi = await import("@ledgerhq/ledger-bitcoin");
+  const { BIP32 } = await import("@bitcoinerlab/descriptors");
+  const { mnemonicToSeedSync } = await import("@scure/bip39");
+  const {
+    readLedgerAccount, ledgerAccountFrom, signStatementWith, lockPolicyName, keyFromXpub, xpubForNetwork,
+  } = await import("../src/wallet/core.mjs");
+
+  const ledgerWords = newWords();
+  const device = fakeLedger(ledgerWords, net.network);
+  const session = { client: device.client, bitcoinApi, network: net.network, store: {} };
+  let connections = 0;
+  const useLedger = async (fn) => { connections++; return fn(session); };
+  const keyExpression = await readLedgerAccount(session, net);
+  const led = ledgerAccountFrom({ keyExpression, network: net, useLedger });
+  check("A Ledger opens the same standard account its words would",
+    led.address === accountFromWords(ledgerWords, net).address && led.publicKey === accountFromWords(ledgerWords, net).publicKey, led.address.slice(0, 18) + "…");
+
+  const statement = "I have read The Test Declaration and join as a member.";
+  const sig = await signStatementWith(led, statement);
+  check("It signs the declaration on the device, and the register's checker accepts it",
+    verifyMembership({ address: led.address, signature: sig, message: statement, hrp: "rb" }).valid && device.log.messages[0]?.text === statement);
+
+  // A co-signer that publishes its xpub, as hardware wallets need.
+  const coRoot = BIP32.fromSeed(mnemonicToSeedSync(newWords()), net.network);
+  const coXpub = coRoot.derivePath("m/84'/1'/0'").neutered().toBase58();
+  const coKey = keyFromXpub(coXpub);
+
+  await chain.broadcast((await buildSend({ account: miner, chain, to: led.address, amount: 400_000n, feeRate: 2 })).hex);
+  await rpc("generatetoaddress", [1, miner.address]);
+  const LT = (await chain.medianTime()) + 2 * 86400;
+  const ledLock = { ...lockFor({ account: led, cosignerPubkey: coKey, locktime: LT }), cosignerXpub: coXpub };
+  check("The Ledger's lock is the one the register rebuilds",
+    ledLock.address === lockAddress({ ownerPubkey: led.publicKey, cosignerPubkey: coKey, locktime: LT }, "rb"));
+  await refuses("A Ledger won't lock money into a lock it couldn't take home (no co-signer xpub)",
+    () => buildLock({ account: led, chain, lock: { ...ledLock, cosignerXpub: undefined }, feeRate: 2, amount: 250_000n }), "xpub");
+  const sentIn = await buildLock({ account: led, chain, lock: ledLock, feeRate: 2, amount: 250_000n });
+  await chain.broadcast(sentIn.hex);
+  await rpc("generatetoaddress", [1, miner.address]);
+  const ledState = async (l) => lockState({ chain, lock: l, medianTime: await chain.medianTime() });
+  check("The Ledger signs money into a lock, and the network accepts it", (await ledState(ledLock)).state === "locked");
+
+  node.network.time.offset = LT - Math.floor(Date.now() / 1000) + 3600;
+  for (let i = 0; i < 12; i++) await rpc("generatetoaddress", [1, miner.address]);
+
+  await refuses("Taking it home when the co-signer's xpub isn't published",
+    () => takeHome({ account: led, chain, lock: { ...ledLock, cosignerXpub: undefined }, feeRate: 2, medianTime: LT + 1 }), "xpub");
+  const wrongXpub = BIP32.fromSeed(mnemonicToSeedSync(newWords()), net.network).derivePath("m/84'/1'/0'").neutered().toBase58();
+  await refuses("…or when the xpub stands for a different key",
+    () => takeHome({ account: led, chain, lock: { ...ledLock, cosignerXpub: wrongXpub }, feeRate: 2, medianTime: LT + 1 }), "doesn't stand for its key");
+
+  // Locked again first, with the money still waiting added in: two kinds of
+  // input, two policies, one transaction.
+  const ledRenewed = { ...lockFor({ account: led, cosignerPubkey: coKey, locktime: (await chain.medianTime()) + 2 * 86400 }), cosignerXpub: coXpub };
+  const waitingBefore = (await waitingBalance(chain, led.address)).confirmed;
+  const lockedBefore = (await ledState(ledLock)).confirmed;
+  const renewTx = await relock({ account: led, chain, lock: ledLock, newLock: ledRenewed, feeRate: 2, medianTime: await chain.medianTime(), addWaiting: true });
+  await chain.broadcast(renewTx.hex);
+  await rpc("generatetoaddress", [1, miner.address]);
+  const reg = device.log.registered.at(-1);
+  check("The device is asked to approve the lock's rules once, by name, in the form a Ledger accepts",
+    reg?.template === `wsh(and_v(v:pk(@0/**),or_i(after(${LT}),pk(@1/**))))` && reg.name === lockPolicyName(LT)
+      && reg.keys[1] === xpubForNetwork(coXpub, net.network), reg?.name);
+  check("The Ledger locks it again, old lock and waiting money together, and the network accepts it",
+    (await ledState(ledRenewed)).confirmed === lockedBefore + waitingBefore - renewTx.fee && (await ledState(ledLock)).state === "withdrawn");
+
+  node.network.time.offset = ledRenewed.locktime - Math.floor(Date.now() / 1000) + 3600;
+  for (let i = 0; i < 12; i++) await rpc("generatetoaddress", [1, miner.address]);
+  const before = connections;
+  const homeTx = await takeHome({ account: led, chain, lock: ledRenewed, feeRate: 2, medianTime: await chain.medianTime() });
+  await chain.broadcast(homeTx.hex);
+  await rpc("generatetoaddress", [1, miner.address]);
+  check("The Ledger takes it home after its date, and the network accepts it",
+    (await ledState(ledRenewed)).state === "withdrawn" && (await waitingBalance(chain, led.address)).confirmed === homeTx.sent,
+    `${homeTx.sent} sats home`);
+  check("…one connection to the device for the whole transaction", connections === before + 1);
+  check("The key never left the device: the wallet can't sign by itself", (() => { try { led.signer(); return false; } catch { return true; } })());
+}
+
 await node.close();
 rule();
 console.log(failures === 0

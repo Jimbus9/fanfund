@@ -5,6 +5,7 @@
   "dependencies": {
     "@bitcoinerlab/descriptors": "^3.2.0",
     "@bitcoinerlab/miniscript": "^2.0.0",
+    "@ledgerhq/ledger-bitcoin": "0.3.1",
     "@scure/bip39": "^2.4.0",
     "bs58check": "4.0.0",
     "buffer": "^6.0.3",
