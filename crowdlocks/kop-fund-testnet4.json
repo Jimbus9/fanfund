@@ -21,6 +21,9 @@
     "020818f8a38dd1bb06a79af42d1cb98f466cddcbed39905379daa9a5bbf1103605",
     "022d292cdd06b930b79f74167f14727645aa06c439323e6e4c00070524b9a80341"
   ],
+  "cosigner_xpubs": [
+    "tpubDDifeKFZX3oWfYRDrbBdnEh7aa2vepEYJWzfEe3h12kHJBJcc8cLPVUiAfnXxULf5upX52TGWrLRwbVJX77Fjd92bDMXz9p2xiRKvJ4nmsN"
+  ],
   "gathering_window_max_days": 28,
   "settlement_window_max_days": 14,
   "destination_wait_days": 14,

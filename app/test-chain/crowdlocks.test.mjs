@@ -231,6 +231,28 @@ check("A failed answer isn't remembered", calls === 2, `${calls} calls`);
     rec.releases.length === 1 && rec.releases[0].txid === "e1" && rec.releases[0].member === "tb1qm" && rec.unreadable === 0);
 }
 
+// A hardware wallet's view of the lock. Given the co-signer as an xpub, the
+// same lock must come out at exactly the same address, and turn into the
+// wallet policy a Ledger (BIP 388) accepts. If either fails, no hardware
+// wallet member could ever take a lock home.
+{
+  const { Output, networks: nets } = await import("@bitcoinerlab/descriptors");
+  const { createRequire } = await import("node:module");
+  const { accountFromWords, lockFor, xpubForNetwork, keyFromXpub } = await import("../src/wallet/core.mjs");
+  const req = createRequire(import.meta.url);
+  const { derivePolicyFromOutput } = req(join(dirname(fileURLToPath(import.meta.url)), "../node_modules/@bitcoinerlab/descriptors-core/dist/hww/policies.js"));
+  const acct = accountFromWords("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", "testnet4");
+  const XP = xpubForNetwork("xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V", "testnet4");
+  const t = 1893456000;
+  const plain = lockFor({ account: acct, cosignerPubkey: keyFromXpub(XP), locktime: t });
+  const out = new Output({ descriptor: `wsh(and_v(v:pk(${acct.keyExpression}),or_i(after(${t}),pk(${XP}/0/0))))`, network: nets.testnet });
+  check("Written with xpubs, the way a hardware wallet sees it, the lock is the same address", out.getAddress() === plain.address, plain.address);
+  const pol = await derivePolicyFromOutput({ output: out, getMasterFingerprint: async () => Buffer.from(acct.keyExpression.slice(1, 9), "hex") });
+  check("…and becomes the wallet policy a Ledger accepts",
+    pol.descriptorTemplate === `wsh(and_v(v:pk(@0/**),or_i(after(${t}),pk(@1/**))))` && pol.keyRoots[1] === XP && pol.change === 0 && pol.index === 0,
+    pol.descriptorTemplate);
+}
+
 // Warning members when a Crowdlock's co-signer keys change.
 {
   const { keyChanges, historyLinkFor } = await import("../src/crowdlocks.mjs");
