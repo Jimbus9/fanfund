@@ -95,3 +95,20 @@ export async function saveExpectedKeys(url: string, keys: string[]): Promise<voi
   if (keys.length) all[url] = keys; else delete all[url];
   await SecureStore.setItemAsync(EXPECTED_KEYS, JSON.stringify(all));
 }
+
+// What a Ledger has approved (each lock's rules, once) and its fingerprint.
+// Not secret — it proves nothing without the device — but keeping it means
+// the device isn't asked to approve the same lock twice.
+const LEDGER_STORE = "crowdlock.ledgerstore.v1";
+
+export async function loadLedgerStore(): Promise<any> {
+  try { return JSON.parse((await SecureStore.getItemAsync(LEDGER_STORE)) ?? "{}"); } catch { return {}; }
+}
+
+export async function saveLedgerStore(store: any): Promise<void> {
+  await SecureStore.setItemAsync(LEDGER_STORE, JSON.stringify(store ?? {}));
+}
+
+export async function forgetLedgerStore(): Promise<void> {
+  await SecureStore.deleteItemAsync(LEDGER_STORE);
+}

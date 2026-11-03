@@ -27,8 +27,11 @@ import QRCode from "react-native-qrcode-svg";
 import {
   newWords, wordsAreValid, tidyWords, accountFromWords, suggestWords, waitingBalance, buildSend, signStatement,
   lockFor, lockDate, buildLock, lockState, takeHome, relock, cosignerFromWords, newCosignerWords, cosignerKeyFromWords, COSIGNER_PATH,
-  isPublicKey, keyFromXpub, xpubForKey,
+  isPublicKey, keyFromXpub, xpubForKey, ledgerAccountFrom, readLedgerAccount, signStatementWith,
 } from "./src/wallet/core.mjs";
+import {
+  isLedgerWallet, readLedgerWallet, ledgerWalletText, ledgerUser, withLedger, lookForLedgers, askForBluetooth, ledgerAppFor,
+} from "./src/ledgerBle";
 // @ts-ignore — plain modules shared with the tests
 import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS, checkWithNewKey } from "./src/start.mjs";
 // @ts-ignore
@@ -50,7 +53,7 @@ import {
 import { postToRelays, announce, fetchAnnouncements } from "./src/relays.mjs";
 import {
   loadWords, saveWords, forgetWords, loadAddedCrowdlocks, saveAddedCrowdlocks, forgetAddedCrowdlocks,
-  loadSavedLocks, saveLock, forgetSavedLocks, loadSeenKeys, saveSeenKeys, loadExpectedKeys, saveExpectedKeys } from "./src/storage";
+  loadSavedLocks, saveLock, forgetSavedLocks, forgetLedgerStore, loadSeenKeys, saveSeenKeys, loadExpectedKeys, saveExpectedKeys } from "./src/storage";
 import { NETWORK, IS_TEST_MONEY, chain, EXPLORER_WEB } from "./src/config";
 
 type Screen =
@@ -65,7 +68,8 @@ type Screen =
   | { name: "addCrowdlock"; words: string; link?: string }
   | { name: "startCrowdlock"; words: string }
   | { name: "findCrowdlocks"; words: string }
-  | { name: "cosignerKey"; words: string };
+  | { name: "cosignerKey"; words: string }
+  | { name: "ledgerSetup" };
 
 export default function App() {
   const [screen, setScreenRaw] = useState<Screen>({ name: "loading" });
@@ -118,6 +122,7 @@ export default function App() {
           {screen.name === "startCrowdlock" && <StartCrowdlock words={screen.words} go={setScreen} />}
           {screen.name === "findCrowdlocks" && <FindCrowdlocks words={screen.words} go={setScreen} />}
           {screen.name === "cosignerKey" && <CosignerKey words={screen.words} go={setScreen} />}
+          {screen.name === "ledgerSetup" && <LedgerSetup go={setScreen} />}
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -128,6 +133,22 @@ type Go = (s: Screen) => void;
 
 // ---------------------------------------------------------------------------
 
+// The wallet on this phone: backup words, or a Ledger that holds the key.
+// Everything else in the app treats them the same; only signing differs.
+function walletAccount(words: string): any {
+  if (isLedgerWallet(words)) {
+    const w = readLedgerWallet(words);
+    return { ...ledgerAccountFrom({ keyExpression: w.keyExpression, network: NETWORK, useLedger: ledgerUser(w, NETWORK) }), ledgerName: w.name };
+  }
+  return accountFromWords(words, NETWORK);
+}
+
+// Shown wherever a Ledger wallet is about to be asked to sign.
+function LedgerHint({ account }: { account: any }) {
+  if (account?.kind !== "ledger") return null;
+  return <Text style={s.note}>This wallet signs on your Ledger ({account.ledgerName}). Keep it unlocked and close by, with the {ledgerAppFor(NETWORK)} app open, and approve on its screen when it asks.</Text>;
+}
+
 function Welcome({ go }: { go: Go }) {
   return (
     <View>
@@ -135,6 +156,73 @@ function Welcome({ go }: { go: Go }) {
       <Text style={s.p}>Your own bitcoin wallet. Nobody else holds your money — not us, not anyone.</Text>
       <Button label="Create a new wallet" onPress={() => go({ name: "showWords", words: newWords() })} />
       <Button label="I already have backup words" kind="plain" onPress={() => go({ name: "restore" })} />
+      <Button label="Use a Ledger" kind="plain" onPress={() => go({ name: "ledgerSetup" })} />
+    </View>
+  );
+}
+
+// Setting up a Ledger as this phone's wallet. The key stays on the device;
+// the phone keeps only the account's public part, to show balances without it.
+function LedgerSetup({ go }: { go: Go }) {
+  const [stage, setStage] = useState<"start" | "looking" | "reading" | "found">("start");
+  const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<{ deviceId: string; name: string; keyExpression: string } | null>(null);
+  const stop = useRef<(() => void) | null>(null);
+  useEffect(() => () => stop.current?.(), []);
+  const app = ledgerAppFor(NETWORK);
+
+  const look = async () => {
+    setError(null); setDevices([]);
+    if (!(await askForBluetooth())) { setError("The app needs Bluetooth permission to find your Ledger. Allow it in your phone's settings for Crowdlock, then try again."); return; }
+    setStage("looking");
+    stop.current?.();
+    stop.current = lookForLedgers(
+      (d) => setDevices((old) => (old.some((x) => x.id === d.id) ? old : [...old, d])),
+      (e) => { setError(e.message); setStage("start"); },
+    );
+  };
+
+  const choose = async (d: { id: string; name: string }) => {
+    stop.current?.(); stop.current = null;
+    setStage("reading"); setError(null);
+    try {
+      const keyExpression = await withLedger(d.id, NETWORK, (session) => readLedgerAccount(session, NETWORK));
+      setWallet({ deviceId: d.id, name: d.name, keyExpression });
+      setStage("found");
+    } catch (e: any) { setError(String(e.message ?? e)); setStage("start"); }
+  };
+
+  const account = wallet ? walletAccount(ledgerWalletText(wallet)) : null;
+  return (
+    <View>
+      <Text style={s.h1}>Use a Ledger</Text>
+      {stage === "start" && <>
+        <Text style={s.p}>Your Ledger keeps the key. This phone only shows your balance and asks the Ledger to sign, and you approve every signature on the Ledger's own screen.</Text>
+        <Text style={s.note}>1. Turn the Ledger on and unlock it with its PIN.</Text>
+        <Text style={s.note}>2. Open the {app} app on it{(NETWORK as string) === "mainnet" ? "" : " (install it in Ledger Live if it isn't there: My Ledger, with Developer mode on in Settings)"}.</Text>
+        <Text style={s.note}>3. Make sure Bluetooth is on, on the phone and the Ledger.</Text>
+        <Button label="Find my Ledger" onPress={look} />
+      </>}
+      {stage === "looking" && <>
+        <Text style={s.p}>Looking for Ledgers nearby…</Text>
+        {devices.length === 0 && <ActivityIndicator style={{ marginVertical: 16 }} />}
+        {devices.map((d) => <Button key={d.id} label={`Use ${d.name}`} onPress={() => choose(d)} />)}
+        <Text style={s.note}>The first time, the phone and the Ledger may ask to pair, each showing a code. Check they match, then accept on both.</Text>
+        <Button label="Stop looking" kind="plain" onPress={() => { stop.current?.(); setStage("start"); }} />
+      </>}
+      {stage === "reading" && <>
+        <Text style={s.p}>Reading your account from the Ledger…</Text>
+        <ActivityIndicator style={{ marginVertical: 16 }} />
+      </>}
+      {stage === "found" && account && <>
+        <Text style={s.p}>This is your Ledger's wallet. It's the same address Ledger Live, Sparrow or any standard wallet shows for this Ledger's first native segwit account.</Text>
+        <Text style={s.mono} selectable>{account.address}</Text>
+        <Button label="Use this Ledger" onPress={async () => { const text = ledgerWalletText(wallet!); await saveWords(text); go({ name: "home", words: text }); }} />
+        <Button label="Try again" kind="plain" onPress={() => { setWallet(null); setStage("start"); }} />
+      </>}
+      {error && <Text style={s.error}>{error}</Text>}
+      <Button label="Back" kind="plain" onPress={() => { stop.current?.(); go({ name: "welcome" }); }} />
     </View>
   );
 }
@@ -242,7 +330,7 @@ function Restore({ go }: { go: Go }) {
 // ---------------------------------------------------------------------------
 
 function Home({ words, go }: { words: string; go: Go }) {
-  const account = useMemo(() => accountFromWords(words, NETWORK), [words]);
+  const account = useMemo(() => walletAccount(words), [words]);
   const [balance, setBalance] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -256,10 +344,12 @@ function Home({ words, go }: { words: string; go: Go }) {
 
   const remove = () => Alert.alert(
     "Remove this wallet from the phone?",
-    "Only do this if your 12 words are written down. Without them the money cannot be recovered.",
+    account.kind === "ledger"
+      ? "Your Ledger keeps the key — this only forgets it on this phone. You can connect it again any time."
+      : "Only do this if your 12 words are written down. Without them the money cannot be recovered.",
     [
       { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); await forgetAddedCrowdlocks(); await forgetSavedLocks(); go({ name: "welcome" }); } },
+      { text: "Remove", style: "destructive", onPress: async () => { await forgetWords(); await forgetAddedCrowdlocks(); await forgetSavedLocks(); await forgetLedgerStore(); go({ name: "welcome" }); } },
     ],
   );
 
@@ -297,7 +387,7 @@ function Home({ words, go }: { words: string; go: Go }) {
 }
 
 function Send({ words, go }: { words: string; go: Go }) {
-  const account = useMemo(() => accountFromWords(words, NETWORK), [words]);
+  const account = useMemo(() => walletAccount(words), [words]);
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [all, setAll] = useState(false);
@@ -345,7 +435,8 @@ function Send({ words, go }: { words: string; go: Go }) {
       <Button label={all ? "Send a set amount instead" : "Send everything"} kind="plain" onPress={() => { setAll(!all); setReview(null); }} />
 
       {error && <Text style={s.error}>{error}</Text>}
-      {!review && <Button label={busy ? "Checking…" : "Review"} disabled={busy || !to} onPress={prepare} />}
+      {!review && <LedgerHint account={account} />}
+      {!review && <Button label={busy ? (account.kind === "ledger" ? "Approve it on your Ledger…" : "Checking…") : "Review"} disabled={busy || !to} onPress={prepare} />}
       {review && (
         <View style={s.panel}>
           <Text style={s.p}>Sending <Text style={s.bold}>{btc(review.sent)}</Text></Text>
@@ -424,7 +515,7 @@ function CrowdlockList({ words, address, go }: { words: string; address: string;
 }
 
 function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: Go }) {
-  const account = useMemo(() => accountFromWords(words, NETWORK), [words]);
+  const account = useMemo(() => walletAccount(words), [words]);
   const [c, setC] = useState<Loaded | null>(null);
   const [total, setTotal] = useState<{ sats: bigint; locks: number; members: number } | null>(null);
   const [showText, setShowText] = useState(false);
@@ -471,7 +562,9 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
   const me = membershipOf(c.register, account.address);
   const join = async () => {
     setBusy(true); setResult(null);
-    const signature = signStatement(account, c.statement);
+    let signature: string;
+    try { signature = await signStatementWith(account, c.statement); }
+    catch (e: any) { setResult({ ok: false, text: String(e.message ?? e) }); setBusy(false); return; }
     // A Crowdlock that names relays takes its members from there: posted
     // publicly, collected by its own repository within a few minutes.
     if (Array.isArray(c.crowdlock.relays)) {
@@ -522,6 +615,7 @@ function CrowdlockScreen({ words, url, go }: { words: string; url: string; go: G
           ? <Text style={s.note}>This Crowdlock uses a different network from this app.</Text>
           : <>
               <Text style={s.note}>Signing is free and moves no money. It proves this wallet agrees to the declaration, and the register checks it before adding you.</Text>
+              <LedgerHint account={account} />
               <Button label={busy ? "Signing and sending…" : "Sign and join"} disabled={busy} onPress={join} />
             </>}
       {result && <Text style={result.ok ? s.good : s.error}>{result.text}</Text>}
@@ -574,6 +668,8 @@ type LockRow = LockTerms & { state: string; confirmed: bigint; arriving: bigint;
 function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Extract<Loaded, { ok: true }>; onChange: () => void; paused?: boolean }) {
   // New locks name the newest key; older ones stay listed for the locks that name them.
   const cosigner: string | undefined = newestCosigner(c.crowdlock);
+  // A Ledger can't take home a lock whose co-signer xpub it was never given.
+  const noLedgerXpub = account.kind === "ledger" && !!cosigner && !xpubForKey(c.crowdlock, cosigner);
   const minimum = BigInt(c.crowdlock.minimum_counted_lock_sats);
   const lengths: number[] = c.crowdlock.lock_lengths_years;
   const [waiting, setWaiting] = useState<{ confirmed: bigint; arriving: bigint } | null>(null);
@@ -670,7 +766,7 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
         { text: "Lock it", onPress: async () => {
           setBusy("lock"); setMessage(null);
           try {
-            const lock = lockFor({ account, cosignerPubkey: cosigner, locktime });
+            const lock = { ...lockFor({ account, cosignerPubkey: cosigner, locktime }), cosignerXpub: xpubForKey(c.crowdlock, cosigner) };
             const feeRate = await chain.feeRate();
             const tx = await buildLock({ account, chain, lock, feeRate, amount: chosen.amount });
             // The terms are saved before the money moves, and checked saved.
@@ -696,7 +792,7 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
         { text: "Take it home", onPress: async () => {
           setBusy(row.address); setMessage(null);
           try {
-            const tx = await takeHome({ account, chain, lock: row, feeRate: await chain.feeRate(), medianTime: await chain.medianTime() });
+            const tx = await takeHome({ account, chain, lock: { ...row, cosignerXpub: xpubForKey(c.crowdlock, row.cosignerPubkey) }, feeRate: await chain.feeRate(), medianTime: await chain.medianTime() });
             await chain.broadcast(tx.hex);
             setMessage({ ok: true, text: `${btc(tx.sent)} is on its way back to your waiting balance (fee ${btc(tx.fee)}).` });
             await refresh(); onChange();
@@ -722,7 +818,7 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
           try {
             const newLock = lockFor({ account, cosignerPubkey: cosigner, locktime });
             const tx = await relock({
-              account, chain, lock: row, newLock, addWaiting: extra > 0n,
+              account, chain, lock: { ...row, cosignerXpub: xpubForKey(c.crowdlock, row.cosignerPubkey) }, newLock, addWaiting: extra > 0n,
               feeRate: await chain.feeRate(), medianTime: await chain.medianTime(),
             });
             await saveLock({ crowdlock: c.url, address: newLock.address, locktime, cosignerPubkey: cosigner });
@@ -743,6 +839,8 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
   return (
     <View>
       <Text style={s.h2}>Your locks</Text>
+      <LedgerHint account={account} />
+      {account.kind === "ledger" && !xpubForKey(c.crowdlock, cosigner) && <Text style={s.error}>This Crowdlock's co-signer hasn't published the xpub a Ledger needs, so a Ledger can't lock here yet: it couldn't take the lock home. Ask its founder to add it.</Text>}
 
       {waiting === null ? <ActivityIndicator /> : (waiting as any).failed ? null : ready ? (
         <View style={s.panel}>
@@ -767,7 +865,7 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
           {lengths.some((y) => y < 1) && <Text style={s.note}>The test network's clock can run ahead of real time, so a short test lock may unlock early. Real bitcoin's never does.</Text>}
           <Button
             label={busy === "lock" ? "Locking…" : chosen.amount === "all" ? "Lock everything waiting" : `Lock ${btc(chosen.shown)}`}
-            disabled={busy !== null || !!chosen.problem || paused} onPress={lockIt}
+            disabled={busy !== null || !!chosen.problem || paused || noLedgerXpub} onPress={lockIt}
           />
         </View>
       ) : (
@@ -792,7 +890,7 @@ function MyLocks({ account, c, onChange, paused = false }: { account: any; c: Ex
           {r.state === "arriving" && <Text style={s.note}>{viaRelays ? "Posted to the relays; goes on the register once it confirms." : "Goes on the register once it confirms."}</Text>}
           <Text style={[s.mono, { fontSize: 12 }]} selectable>{r.address}</Text>
           {r.state === "lapsed" && renewing !== r.address && <>
-            <Button label="Lock it again" disabled={busy !== null || paused} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
+            <Button label="Lock it again" disabled={busy !== null || paused || noLedgerXpub} onPress={() => { setRenewing(r.address); setAddWaiting(false); }} />
             <Button label={busy === r.address ? "Sending…" : "Take it home"} kind="plain" disabled={busy !== null} onPress={() => home(r)} />
           </>}
           {r.state === "lapsed" && renewing === r.address && <>
@@ -1251,7 +1349,9 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
 
   // The test copy's co-signer key is made here, from the founder's own words,
   // on a path of its own. The real one is pasted in from wherever it lives.
-  const testCoKey = useMemo(() => cosignerFromWords(words, "testnet4"), [words]);
+  // A Ledger wallet has no words here to make the test copy's co-signer from,
+  // so its founder pastes one (made with "Make a co-signer key").
+  const testCoKey = useMemo(() => (isLedgerWallet(words) ? { publicKey: "", xpub: "" } : cosignerFromWords(words, "testnet4")), [words]);
   const testCo = testCoKey.publicKey;
 
   const input = (siteBase: string) => {
@@ -1383,7 +1483,7 @@ function StartCrowdlock({ words, go }: { words: string; go: Go }) {
       </> : <Text style={s.note}>Test bitcoin has no value: practise everything — joining, locking, taking a lock home — before anything is real.</Text>}
 
       <Text style={s.label}>{network === "mainnet" ? "The test copy's co-signer key" : "Co-signer key"}</Text>
-      <Text style={s.note}>{testPasted.trim() ? "Using the key you pasted." : `Made on this phone from your backup words: ${testCo.slice(0, 10)}…${testCo.slice(-8)}. Or paste a practice key you made instead:`}</Text>
+      <Text style={s.note}>{testPasted.trim() ? "Using the key you pasted." : !testCo ? "This wallet is on a Ledger, so paste a practice co-signer key (made with \"Make a co-signer key\") — its xpub, ideally:" : `Made on this phone from your backup words: ${testCo.slice(0, 10)}…${testCo.slice(-8)}. Or paste a practice key you made instead:`}</Text>
       <TextInput style={s.input} autoCapitalize="none" autoCorrect={false} value={testPasted} onChangeText={(t) => { setTestPasted(t); setChecked(null); }} placeholder="Optional: an xpub, or a key 02… or 03…" />
       {!!testPasted.trim() && !isPublicKey(testPasted) && !keyFromXpub(testPasted) && <Text style={s.error}>That isn't a public key or an xpub. Copy it whole from where the key was made.</Text>}
       <Text style={s.note}>You can add more co-signer keys later, under "Look after this Crowdlock".</Text>

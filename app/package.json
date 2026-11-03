@@ -6,6 +6,7 @@
     "@bitcoinerlab/descriptors": "^3.2.0",
     "@bitcoinerlab/miniscript": "^2.0.0",
     "@ledgerhq/ledger-bitcoin": "0.3.1",
+    "@ledgerhq/react-native-hw-transport-ble": "6.41.0",
     "@scure/bip39": "^2.4.0",
     "bs58check": "4.0.0",
     "buffer": "^6.0.3",
@@ -17,6 +18,7 @@
     "nostr-tools": "2.25.2",
     "react": "19.3.0",
     "react-native": "0.88.0",
+    "react-native-ble-plx": "3.4.0",
     "react-native-qrcode-svg": "^6.3.45",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-svg": "^15.16.0"
