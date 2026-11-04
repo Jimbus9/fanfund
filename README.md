@@ -45,7 +45,7 @@ The public pages at https://jimbus9.github.io/fanfund/, and the services behind 
 | What | Where |
 | --- | --- |
 | Front page | `index.html` |
-| The pages: Why, How it works, Risks, The register, The documents | `why/`, `how/`, `risk/`, `register/`, `spec/index.html` |
+| The pages: Why, How it works, The society, Risks, The register, The documents | `why/`, `how/`, `society/`, `risk/`, `register/`, `spec/index.html` |
 | Join: wallet-by-wallet signing and checking, then posting to the relays | `join/` |
 | A mock-up of the register, with invented figures | `mock/` |
 | Styling | `style.css` |
