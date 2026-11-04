@@ -31,7 +31,7 @@ import {
 } from "./src/wallet/core.mjs";
 import {
   isLedgerWallet, readLedgerWallet, ledgerWalletText, ledgerUser, withLedger, lookForLedgers, askForBluetooth, ledgerAppFor,
-} from "./src/ledgerBle";
+} from "./src/ledgerDevice";
 // @ts-ignore — plain modules shared with the tests
 import { buildCrowdlock, declarationSkeleton, slugify, DEFAULT_RELAYS, checkWithNewKey } from "./src/start.mjs";
 // @ts-ignore
@@ -146,7 +146,7 @@ function walletAccount(words: string): any {
 // Shown wherever a Ledger wallet is about to be asked to sign.
 function LedgerHint({ account }: { account: any }) {
   if (account?.kind !== "ledger") return null;
-  return <Text style={s.note}>This wallet signs on your Ledger ({account.ledgerName}). Keep it unlocked and close by, with the {ledgerAppFor(NETWORK)} app open, and approve on its screen when it asks.</Text>;
+  return <Text style={s.note}>This wallet signs on your Ledger ({account.ledgerName}). Keep it unlocked, close by or plugged in, with the {ledgerAppFor(NETWORK)} app open, and approve on its screen when it asks.</Text>;
 }
 
 function Welcome({ go }: { go: Go }) {
@@ -165,16 +165,18 @@ function Welcome({ go }: { go: Go }) {
 // the phone keeps only the account's public part, to show balances without it.
 function LedgerSetup({ from, go }: { from?: string; go: Go }) {
   const [stage, setStage] = useState<"start" | "looking" | "reading" | "found">("start");
-  const [devices, setDevices] = useState<{ id: string; name: string }[]>([]);
+  const [devices, setDevices] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [wallet, setWallet] = useState<{ deviceId: string; name: string; keyExpression: string } | null>(null);
+  const [wallet, setWallet] = useState<{ deviceId: string; name: string; keyExpression: string; via?: "bluetooth" | "cable" } | null>(null);
   const stop = useRef<(() => void) | null>(null);
   useEffect(() => () => stop.current?.(), []);
   const app = ledgerAppFor(NETWORK);
 
   const look = async () => {
     setError(null); setDevices([]);
-    if (!(await askForBluetooth())) { setError("The app needs Bluetooth permission to find your Ledger. Allow it in your phone's settings for Crowdlock, then try again."); return; }
+    // Without Bluetooth permission a cable still works, so carry on and say so.
+    const bt = await askForBluetooth();
+    if (!bt) setError("Without Bluetooth permission the app can only find a Ledger plugged in by cable. To use Bluetooth, allow it in your phone's settings for Crowdlock.");
     setStage("looking");
     stop.current?.();
     stop.current = lookForLedgers(
@@ -183,12 +185,12 @@ function LedgerSetup({ from, go }: { from?: string; go: Go }) {
     );
   };
 
-  const choose = async (d: { id: string; name: string }) => {
+  const choose = async (d: any) => {
     stop.current?.(); stop.current = null;
     setStage("reading"); setError(null);
     try {
-      const keyExpression = await withLedger(d.id, NETWORK, (session) => readLedgerAccount(session, NETWORK));
-      setWallet({ deviceId: d.id, name: d.name, keyExpression });
+      const keyExpression = await withLedger({ deviceId: d.id, device: d.device }, NETWORK, (session) => readLedgerAccount(session, NETWORK));
+      setWallet({ deviceId: d.id, name: d.name, keyExpression, via: d.via });
       setStage("found");
     } catch (e: any) { setError(String(e.message ?? e)); setStage("start"); }
   };
@@ -201,14 +203,14 @@ function LedgerSetup({ from, go }: { from?: string; go: Go }) {
         <Text style={s.p}>Your Ledger keeps the key. This phone only shows your balance and asks the Ledger to sign, and you approve every signature on the Ledger's own screen.</Text>
         <Text style={s.note}>1. Turn the Ledger on and unlock it with its PIN.</Text>
         <Text style={s.note}>2. Open the {app} app on it{(NETWORK as string) === "mainnet" ? "" : " (install it in Ledger Live if it isn't there: My Ledger, with Developer mode on in Settings)"}.</Text>
-        <Text style={s.note}>3. Make sure Bluetooth is on, on the phone and the Ledger.</Text>
+        <Text style={s.note}>3. Either plug it into the phone with a USB-C cable, or turn Bluetooth on, on the phone and the Ledger (Nano X, Flex and Stax have Bluetooth).</Text>
         <Button label="Find my Ledger" onPress={look} />
       </>}
       {stage === "looking" && <>
         <Text style={s.p}>Looking for Ledgers nearby…</Text>
         {devices.length === 0 && <ActivityIndicator style={{ marginVertical: 16 }} />}
-        {devices.map((d) => <Button key={d.id} label={`Use ${d.name}`} onPress={() => choose(d)} />)}
-        <Text style={s.note}>The first time, the phone and the Ledger may ask to pair, each showing a code. Check they match, then accept on both.</Text>
+        {devices.map((d) => <Button key={d.id} label={`Use ${d.name} (${d.via === "cable" ? "cable" : "Bluetooth"})`} onPress={() => choose(d)} />)}
+        <Text style={s.note}>By Bluetooth, the first time, the phone and the Ledger may ask to pair, each showing a code. Check they match, then accept on both. By cable, the phone asks whether Crowdlock may use the Ledger: allow it.</Text>
         <Button label="Stop looking" kind="plain" onPress={() => { stop.current?.(); setStage("start"); }} />
       </>}
       {stage === "reading" && <>
