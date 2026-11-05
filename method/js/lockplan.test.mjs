@@ -44,8 +44,10 @@ check("exactly midnight is not pushed a day on", lockDate(1, 1825027200 - 315576
 const v = verifyMembership({
   address: first.address, signature: first.signature, message: membershipStatement(crowdlock), hrp: "tb",
 });
-check("a member's signature yields their compressed public key", v.valid && /^0[23][0-9a-f]{64}$/.test(v.pubkey ?? ""));
-check("it is the key the app really used for that member's locks", v.pubkey === known?.owner_pubkey);
+check("the member's signature is valid", v.valid);
+const viaPlan = planLock({ crowdlock, register, member: "1", years: 1, now: Date.UTC(2026, 9, 31, 12) / 1000 });
+check("a compressed public key is recovered from it", /^0[23][0-9a-f]{64}$/.test(viaPlan.ownerPubkey ?? ""));
+check("it is the key the app really used for that member's locks", viaPlan.ownerPubkey === known?.owner_pubkey);
 
 // --- The plan, against a lock Bitcoin has already accepted ----------------------
 const plan = planLock({ crowdlock, register, member: first.address, years: 1, now: noon31Oct });

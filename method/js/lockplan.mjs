@@ -16,7 +16,8 @@
 //
 // Pure: no network, no clock (the time is passed in).
 
-import { verifyMembership } from "./verify.mjs";
+import * as secp from "./vendor/noble-secp256k1.js";
+import { verifyMembership, messageHash, memberAddressForOwnerKey } from "./verify.mjs";
 import { membershipStatement } from "./crowdlock.mjs";
 import { prepareLock, hrpFor } from "./lockrecord.mjs";
 
@@ -32,6 +33,30 @@ const YEAR = 365.25 * DAY; // exactly 31,557,600 seconds — part of the format
 export function lockDate(years, nowSeconds) {
   const t = Math.ceil(nowSeconds + years * YEAR);
   return years * YEAR < DAY ? t : Math.ceil(t / DAY) * DAY;
+}
+
+/**
+ * The compressed public key behind a message signature, as hex, or null.
+ *
+ * A signed message carries the key that made it — that is how the register
+ * checks one at all. verify.mjs recovers it too but keeps only the address it
+ * hashes to; that file is copied into every founder's repository, so it is left
+ * alone and the key is recovered here, then checked against the address.
+ */
+function recoverKey(signatureBase64, message) {
+  try {
+    const bin = atob(String(signatureBase64).trim());
+    if (bin.length !== 65) return null;
+    const sig = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const header = sig[0];
+    if (header < 31 || header > 42) return null; // only a compressed key can own a lock
+    const big = (b) => b.reduce((n, x) => (n << 8n) | BigInt(x), 0n);
+    const point = new secp.Signature(big(sig.slice(1, 33)), big(sig.slice(33, 65)), (header - 27) & 3)
+      .recoverPublicKey(messageHash(message));
+    return Array.from(point.toRawBytes(true), (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -67,9 +92,14 @@ export function planLock({ crowdlock, register, member, years, now }) {
   const cosignerPubkey = cosigners[0];
 
   // The key behind a member is in their own signature.
-  const v = verifyMembership({ address: m.address, signature: m.signature, message: membershipStatement(crowdlock), hrp });
-  if (!v.valid || !v.pubkey) return no("this member's registered signature could not be checked, so a lock cannot be built for them");
-  const ownerPubkey = v.pubkey;
+  const statement = membershipStatement(crowdlock);
+  const v = verifyMembership({ address: m.address, signature: m.signature, message: statement, hrp });
+  const ownerPubkey = v.valid ? recoverKey(m.signature, statement) : null;
+  // The recovered key must hash to the member's own address, or it is not theirs.
+  const addr = (a) => String(a).toLowerCase();
+  if (!ownerPubkey || addr(memberAddressForOwnerKey(ownerPubkey, hrp)) !== addr(m.address)) {
+    return no("this member's registered signature could not be checked, so a lock cannot be built for them");
+  }
 
   const locktime = lockDate(years, now);
   let prepared = prepareLock(
