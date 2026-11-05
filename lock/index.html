@@ -111,10 +111,10 @@
     <p><strong>Check it before you send.</strong> The address above can be rebuilt by anybody from the three facts below, and your wallet or the <a href="../spec/lock-format.md">lock format</a> can confirm it independently. If it does not rebuild, do not send.</p>
 
     <div class="card">
-      <b class="head">Keep these. They are the lock.</b>
+      <b class="head">For checking — you do not do anything with these by hand</b>
       <pre id="terms"></pre>
       <button class="btn" id="copyTerms" type="button">Copy these</button>
-      <p class="note">Nothing here is secret. They are what you need, with your own wallet, to take the money home. Save them somewhere you will find in years.</p>
+      <p class="note">Nothing here is secret, and you do not need to keep it: the register publishes the same facts. It is the recipe for the lock, so that anyone — or any wallet or tool — can rebuild the address and check it. You will never type these into anything yourself. On the date, a tool takes the money home for you; which tool depends on your wallet (see below).</p>
     </div>
   </section>
 
@@ -136,6 +136,7 @@
   <section>
     <h2>Taking it home</h2>
     <p>On the date, the key you signed the declaration with can move the money to any address you choose, with nobody else involved. Until then, nobody can.</p>
+    <p><strong>What you will actually do:</strong> not paste anything or work anything out. You will open a tool that knows about locks, tell it which lock, and approve one payment with your own wallet or device. That tool does the rest. The facts above are only what it reads. Which tool, for which wallet, is the part still being proved, which is why this page is closed for real bitcoin.</p>
     <p><strong>What has been proved, and what has not.</strong> Making this address and sending to it works from any wallet, because sending to an address needs no special support. Taking the money <em>out</em> needs your wallet to sign for a custom script, and that is where wallets differ.</p>
     <ul>
       <li><strong>The Crowdlock app's own wallet:</strong> proved on a test network.</li>
