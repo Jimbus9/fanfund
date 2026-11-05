@@ -182,7 +182,13 @@ export function verifyMembership({ address, signature, message, hrp = "bc" }) {
       derived,
     };
   }
-  return { valid: true, reason: "signature matches the address", derived };
+  // The recovered public key, so a lock can be built for this member without
+  // asking them for it again. Only a compressed key can own a lock.
+  return { valid: true, reason: "signature matches the address", derived, pubkey: compressed ? hexOf(pubkey) : null };
+}
+
+function hexOf(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function bytesToBigInt(bytes) {

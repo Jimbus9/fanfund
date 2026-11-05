@@ -20,6 +20,7 @@ import {
   signStatement, lockFor, lockDate, buildLock, lockState, takeHome, relock, newCosignerWords, cosignerKeyFromWords, suggestWords,
 } from "../src/wallet/core.mjs";
 import { lockAddress } from "../../method/js/lockrecord.mjs";
+import { lockDate as siteLockDate } from "../../method/js/lockplan.mjs";
 import { verifyMembership } from "../../method/js/verify.mjs";
 import bitcoinMessage from "../../method/lock/node_modules/bitcoinjs-message/index.js";
 
@@ -235,6 +236,15 @@ await rpc("generatetoaddress", [1, miner.address]);
 check("A one-year lock unlocks on a plain date, a year or so away",
   lockDate(1, 1800000000) % 86400 === 0 && lockDate(1, 1800000000) - 1800000000 >= 365 * 86400);
 check("A test length under a day is not rounded", lockDate(1 / 8766, 1800000000) === 1800000000 + Math.ceil(3600));
+{
+  // The website's Lock page works out the date with its own copy of the rule.
+  // The date decides the address, so a drift between the two would send a
+  // member's money to an address the other side does not watch.
+  const lengths = [1 / 8766, 1 / 365.25, 0.0027378507871321013, 1, 3, 5];
+  const times = [1793491200, 1793491201, 1800000000, 1825027199, 1825027200, 1825027201, 1793516711];
+  const same = lengths.every((y) => times.every((t) => lockDate(y, t) === siteLockDate(y, t)));
+  check("The website and the app work out the same lock date for every length and time", same);
+}
 
 await refuses("A lock whose co-signer is the fan's own key",
   async () => lockFor({ account: saver, cosignerPubkey: saver.publicKey, locktime: 1900000000 }), "your own key");

@@ -47,6 +47,7 @@ The public pages at https://jimbus9.github.io/fanfund/, and the services behind 
 | Front page | `index.html` |
 | The pages: Why, How it works, The society, Risks, The register, The documents | `why/`, `how/`, `society/`, `risk/`, `register/`, `spec/index.html` |
 | Join: wallet-by-wallet signing and checking, then posting to the relays | `join/` |
+| Lock: works out a lock address from public records and publishes it — testnet only until a way home is proved (`method/js/lockplan.mjs`) | `lock/` |
 | A mock-up of the register, with invented figures | `mock/` |
 | Styling | `style.css` |
 | GitHub Pages setting (stops Pages mangling the files) | `.nojekyll` |
@@ -79,7 +80,7 @@ The code moved under `method/` so the four layers are visible from the top. Only
 | `anchor/` | `method/anchor/` | Yes |
 | `relay/` | `method/relay/` | Yes (and still not published by Pages) |
 
-Not moved, so their URLs did not change: `join/`, `crowdlocks/`, `spec/`, `mock/`, `worker.js`, and the founder template's own paths (`relay/`, `js/` in a founder's repository are unchanged).
+Not moved, so their URLs did not change: `join/`, `lock/`, `crowdlocks/`, `spec/`, `mock/`, `worker.js`, and the founder template's own paths (`relay/`, `js/` in a founder's repository are unchanged).
 
 What might be broken from the move, and where to look:
 
