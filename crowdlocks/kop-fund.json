@@ -21,6 +21,9 @@
   "cosigner_keys": [
     "03811ead45a2cf0870ba7c2d31b3ca20d2875e02b5dc91b8f3d4e55f9c86baf68b"
   ],
+  "cosigner_xpubs": [
+    "xpub6CntvpexEbhzNCZPTqfRUNkNZDG5FjuWNopshKmXEkm6RHxvL43u2B6ZADmvEs4UUJWnG3YehtuKXNLsvEnuxYETGd6q5XqwqNEo8pFv7yn"
+  ],
   "gathering_window_max_days": 28,
   "settlement_window_max_days": 14,
   "destination_wait_days": 14,
