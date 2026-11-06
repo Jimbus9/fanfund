@@ -33,7 +33,8 @@
           "bluetoothAlwaysPermission": "Crowdlock uses Bluetooth only to talk to your Ledger, when you ask it to."
         }
       ],
-      "./plugins/withLedgerUsb"
+      "./plugins/withLedgerUsb",
+      "./plugins/withLedgerR8Rules"
     ]
   }
 }
